@@ -11,6 +11,7 @@ func _initialize():
 	var victoires := {"HR": 0, "G": 0, "": 0}
 	var rounds := 0
 	var erreurs := 0
+	var revers := 0
 	for n in 300:
 		var c := Combat.new(unites, hr, g)
 		var actions := 0
@@ -34,7 +35,13 @@ func _initialize():
 					cibles.append(e)
 			var r := rng.randf()
 			if not cibles.is_empty() and r < 0.75:
-				if not c.attaquer(cibles[rng.randi() % cibles.size()]): erreurs += 1; print("attaque refusée")
+				var e = cibles[rng.randi() % cibles.size()]
+				var cases_a: Array = c.cases_attaque(a, e, reach)
+				var depuis = null
+				if not c.peut_tirer(a) and rng.randf() < 0.5:
+					depuis = cases_a[rng.randi() % cases_a.size()]
+					if Combat.a_revers(e, depuis): revers += 1
+				if not c.attaquer(e, depuis): erreurs += 1; print("attaque refusée")
 			elif r < 0.8:
 				c.defendre()
 			elif r < 0.85 and c.peut_attendre():
@@ -47,5 +54,5 @@ func _initialize():
 				c.defendre()
 		victoires[c.vainqueur] += 1
 		rounds += c.round_num
-	print("victoires ", victoires, " rounds moyens ", rounds / 300.0, " erreurs ", erreurs)
+	print("victoires ", victoires, " rounds moyens ", rounds / 300.0, " erreurs ", erreurs, " attaques de dos ", revers)
 	quit()

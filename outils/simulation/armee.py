@@ -21,7 +21,7 @@ from pathlib import Path
 from simulation import (Pile, degats, PENALITE_CAC_TIREUR, PENALITE_HORS_PORTEE,
                         SEUIL_PERTES_MORAL, DUREE_MALUS_MORAL)
 
-LIGNES, COLONNES = 8, 10
+LIGNES, COLONNES = 10, 14
 ROUNDS_MAX = 30
 
 COMPO_HR = [("Esclave du père des rats", 2), ("Frondeur des égouts", 2),

@@ -14,7 +14,7 @@ import random
 import sys
 from pathlib import Path
 
-DISTANCE_DEPART = 9   # grille de 10 de large, piles aux deux bords
+DISTANCE_DEPART = 13  # grille de 14 de large, piles aux deux bords
 ROUNDS_MAX = 30
 MOD_MIN, MOD_MAX = 0.3, 3.0
 PENALITE_CAC_TIREUR = 0.7

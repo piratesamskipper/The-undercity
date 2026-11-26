@@ -2,8 +2,8 @@ class_name Combat
 extends RefCounted
 ## Modèle d'une bataille (règles du GDD), indépendant de l'affichage.
 
-const LIGNES := 8
-const COLONNES := 10
+const LIGNES := 10
+const COLONNES := 14
 const COUT_DIAGONALE := 1.5
 const MOD_MIN := 0.3
 const MOD_MAX := 3.0
@@ -12,6 +12,7 @@ const PENALITE_HORS_PORTEE := 0.5
 const BONUS_DEFENDRE := 1.3
 const SEUIL_PERTES_MORAL := 0.2
 const DUREE_MALUS_MORAL := 3
+const BONUS_REVERS := 1.2      # attaque au corps à corps par l'arrière (valeur provisoire)
 
 var piles: Array = []
 var round_num := 0
@@ -60,6 +61,7 @@ func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> 
 				"pv_total": int(u["pv"]) * int(u["escouade"]),
 				"munitions": int(u["munitions"]), "malus": [], "a_riposte": false,
 				"defend": false, "a_attendu": false,
+				"orient": Vector2i(1, 0) if gauche else Vector2i(-1, 0),
 			})
 	return res
 
@@ -162,15 +164,39 @@ func peut_tirer(p: Dictionary) -> bool:
 	return true
 
 
-## Case d'où attaquer la cible au corps à corps (null si impossible ce tour).
+## Cases d'où la pile peut attaquer la cible au corps à corps ce tour-ci
+## (sa case actuelle si elle est au contact, plus les cases accessibles autour de la cible).
+func cases_attaque(p: Dictionary, cible: Dictionary, reach: Dictionary) -> Array:
+	var res := []
+	if adjacent(p["pos"], cible["pos"]):
+		res.append(p["pos"])
+	for v in voisins(cible["pos"]):
+		if reach.has(v):
+			res.append(v)
+	return res
+
+
+## Case d'attaque par défaut : rester sur place si possible, sinon la plus proche.
 func case_attaque(p: Dictionary, cible: Dictionary, reach: Dictionary):
 	if adjacent(p["pos"], cible["pos"]):
 		return p["pos"]
 	var meilleure = null
-	for v in voisins(cible["pos"]):
-		if reach.has(v) and (meilleure == null or reach[v] < reach[meilleure]):
+	for v in cases_attaque(p, cible, reach):
+		if meilleure == null or reach[v] < reach[meilleure]:
 			meilleure = v
 	return meilleure
+
+
+static func direction(de: Vector2i, vers: Vector2i) -> Vector2i:
+	return Vector2i(signi(vers.x - de.x), signi(vers.y - de.y))
+
+
+## Vrai si une attaque depuis la case `de` frappe la cible dans le dos
+## (une des 3 cases derrière elle, selon son orientation).
+static func a_revers(cible: Dictionary, de: Vector2i) -> bool:
+	var d := direction(cible["pos"], de)
+	var f: Vector2i = cible["orient"]
+	return d.x * f.x + d.y * f.y < 0
 
 
 # --- Déroulement -------------------------------------------------------------
@@ -264,12 +290,14 @@ func _terminer_action() -> void:
 func deplacer(c: Vector2i) -> bool:
 	if actif == null or not accessibles(actif).has(c):
 		return false
+	actif["orient"] = direction(actif["pos"], c)
 	actif["pos"] = c
 	_terminer_action()
 	return true
 
 
-func attaquer(cible: Dictionary) -> bool:
+## Attaque la cible. `depuis` = case choisie pour le corps à corps (sinon case par défaut).
+func attaquer(cible: Dictionary, depuis = null) -> bool:
 	if actif == null or not vivante(cible) or cible["camp"] == actif["camp"]:
 		return false
 	if peut_tirer(actif):
@@ -279,11 +307,18 @@ func attaquer(cible: Dictionary) -> bool:
 		_frapper(actif, cible, mult, "tire sur" if mult == 1.0 else "tire de loin sur")
 		_terminer_action()
 		return true
-	var c = case_attaque(actif, cible, accessibles(actif))
-	if c == null:
+	var reach := accessibles(actif)
+	var c = case_attaque(actif, cible, reach) if depuis == null else depuis
+	if c == null or not cases_attaque(actif, cible, reach).has(c):
 		return false
 	actif["pos"] = c
-	_frapper(actif, cible, PENALITE_CAC_TIREUR if tireur(actif) else 1.0, "attaque")
+	actif["orient"] = direction(c, cible["pos"])
+	var mult := PENALITE_CAC_TIREUR if tireur(actif) else 1.0
+	var verbe := "attaque"
+	if a_revers(cible, c):
+		mult *= BONUS_REVERS
+		verbe = "attaque à revers"
+	_frapper(actif, cible, mult, verbe)
 	if vivante(cible) and vivante(actif) and not cible["a_riposte"]:
 		cible["a_riposte"] = true
 		_frapper(cible, actif, PENALITE_CAC_TIREUR if tireur(cible) else 1.0, "riposte sur")
