@@ -1,0 +1,350 @@
+class_name Combat
+extends RefCounted
+## Modèle d'une bataille (règles du GDD), indépendant de l'affichage.
+
+const LIGNES := 8
+const COLONNES := 10
+const COUT_DIAGONALE := 1.5
+const MOD_MIN := 0.3
+const MOD_MAX := 3.0
+const PENALITE_CAC_TIREUR := 0.7
+const PENALITE_HORS_PORTEE := 0.5
+const BONUS_DEFENDRE := 1.3
+const SEUIL_PERTES_MORAL := 0.2
+const DUREE_MALUS_MORAL := 3
+
+var piles: Array = []
+var round_num := 0
+var actif = null              # pile qui joue
+var tour_bonus := false       # l'actif joue son tour de moral en fin de round
+var file: Array = []          # ordre normal du round
+var attente: Array = []       # piles qui ont choisi Attendre
+var bonus: Array = []         # piles qui rejouent grâce au moral
+var debut_round := {}         # id de pile -> nombre au début du round
+var journal: Array = []       # messages pour le joueur
+var vainqueur := ""
+var rng := RandomNumberGenerator.new()
+
+
+func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", camp_b := "G") -> void:
+	rng.randomize()
+	piles = _deployer(unites, armee_a, camp_a, true) + _deployer(unites, armee_b, camp_b, false)
+	for i in piles.size():
+		piles[i]["id"] = i
+		piles[i]["init"] = int(piles[i]["u"]["initiative"]) + rng.randi_range(1, 12)
+	_demarrer_round()
+	_suivant()
+
+
+# --- Piles -------------------------------------------------------------------
+
+func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> Array:
+	var arriere := 0 if gauche else COLONNES - 1
+	var avant := 1 if gauche else COLONNES - 2
+	var tireurs := []
+	var melee := []
+	for entree in compo:
+		var u: Dictionary = unites[entree[0]]
+		for i in entree[1]:
+			(tireurs if u["portee"] > 0 else melee).append(u)
+	var res := []
+	var ligne_avant := melee.slice(0, LIGNES)
+	var ligne_arriere := tireurs + melee.slice(LIGNES)
+	for colonne in [[ligne_avant, avant], [ligne_arriere, arriere]]:
+		var liste: Array = colonne[0]
+		var debut := (LIGNES - liste.size()) / 2
+		for i in liste.size():
+			var u: Dictionary = liste[i]
+			res.append({
+				"u": u, "camp": camp, "pos": Vector2i(colonne[1], debut + i),
+				"pv_total": int(u["pv"]) * int(u["escouade"]),
+				"munitions": int(u["munitions"]), "malus": [], "a_riposte": false,
+				"defend": false, "a_attendu": false,
+			})
+	return res
+
+
+static func nombre(p: Dictionary) -> int:
+	return ceili(float(p["pv_total"]) / p["u"]["pv"]) if p["pv_total"] > 0 else 0
+
+
+static func vivante(p: Dictionary) -> bool:
+	return p["pv_total"] > 0
+
+
+static func tireur(p: Dictionary) -> bool:
+	return p["u"]["portee"] > 0
+
+
+static func pv_dessus(p: Dictionary) -> int:
+	var reste: int = p["pv_total"] % int(p["u"]["pv"])
+	return reste if reste > 0 else int(p["u"]["pv"])
+
+
+func moral(p: Dictionary) -> int:
+	var m: int = p["u"]["moral"]
+	var remplissage: float = float(nombre(p)) / float(p["u"]["escouade"])
+	if remplissage >= 1.0:
+		m += 2
+	elif remplissage >= 0.75:
+		m += 1
+	m -= p["malus"].size()
+	return clampi(m, 0, 10)
+
+
+func pile_en(c: Vector2i):
+	for p in piles:
+		if vivante(p) and p["pos"] == c:
+			return p
+	return null
+
+
+func ennemis_de(p: Dictionary) -> Array:
+	return piles.filter(func(e): return vivante(e) and e["camp"] != p["camp"])
+
+
+# --- Géométrie ---------------------------------------------------------------
+
+static func dans_grille(c: Vector2i) -> bool:
+	return c.x >= 0 and c.x < COLONNES and c.y >= 0 and c.y < LIGNES
+
+
+static func voisins(c: Vector2i) -> Array:
+	var res := []
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			if dx != 0 or dy != 0:
+				var v := c + Vector2i(dx, dy)
+				if dans_grille(v):
+					res.append(v)
+	return res
+
+
+static func adjacent(a: Vector2i, b: Vector2i) -> bool:
+	return a != b and absi(a.x - b.x) <= 1 and absi(a.y - b.y) <= 1
+
+
+static func distance_tir(a: Vector2i, b: Vector2i) -> float:
+	var dx := absi(a.x - b.x)
+	var dy := absi(a.y - b.y)
+	return maxi(dx, dy) + (COUT_DIAGONALE - 1.0) * mini(dx, dy)
+
+
+## Cases atteignables par la pile : {case: coût}. Diagonale = 1,5 ; on ne traverse pas les piles.
+func accessibles(p: Dictionary) -> Dictionary:
+	var vitesse := float(p["u"]["vitesse"])
+	var couts := {p["pos"]: 0.0}
+	var a_traiter := [p["pos"]]
+	while not a_traiter.is_empty():
+		# petite file de priorité naïve (grille de 80 cases)
+		var meilleur := 0
+		for i in a_traiter.size():
+			if couts[a_traiter[i]] < couts[a_traiter[meilleur]]:
+				meilleur = i
+		var c: Vector2i = a_traiter.pop_at(meilleur)
+		for v in voisins(c):
+			if pile_en(v) != null:
+				continue
+			var nd: float = couts[c] + (COUT_DIAGONALE if v.x != c.x and v.y != c.y else 1.0)
+			if nd <= vitesse and nd < couts.get(v, INF):
+				couts[v] = nd
+				a_traiter.append(v)
+	couts.erase(p["pos"])
+	return couts
+
+
+func peut_tirer(p: Dictionary) -> bool:
+	if not tireur(p) or p["munitions"] <= 0:
+		return false
+	for e in ennemis_de(p):
+		if adjacent(p["pos"], e["pos"]):
+			return false
+	return true
+
+
+## Case d'où attaquer la cible au corps à corps (null si impossible ce tour).
+func case_attaque(p: Dictionary, cible: Dictionary, reach: Dictionary):
+	if adjacent(p["pos"], cible["pos"]):
+		return p["pos"]
+	var meilleure = null
+	for v in voisins(cible["pos"]):
+		if reach.has(v) and (meilleure == null or reach[v] < reach[meilleure]):
+			meilleure = v
+	return meilleure
+
+
+# --- Déroulement -------------------------------------------------------------
+
+func _demarrer_round() -> void:
+	round_num += 1
+	debut_round.clear()
+	var vivantes := piles.filter(func(p): return vivante(p))
+	for p in vivantes:
+		p["a_riposte"] = false
+		p["a_attendu"] = false
+		p["tirage"] = rng.randf()
+		debut_round[p["id"]] = nombre(p)
+	vivantes.sort_custom(func(a, b):
+		return a["init"] > b["init"] or (a["init"] == b["init"] and a["tirage"] > b["tirage"]))
+	file = vivantes
+	attente = []
+	bonus = []
+	_log("— Round %d —" % round_num)
+
+
+func _fin_round() -> void:
+	for p in piles:
+		if not vivante(p):
+			continue
+		var malus: Array = []
+		for x in p["malus"]:
+			if x > 1:
+				malus.append(x - 1)
+		var n0: int = debut_round.get(p["id"], 0)
+		if n0 > 0 and float(n0 - nombre(p)) / n0 > SEUIL_PERTES_MORAL:
+			malus.append(DUREE_MALUS_MORAL)
+			_log("%s : lourdes pertes, moral −1 pour 3 rounds" % p["u"]["nom"])
+		p["malus"] = malus
+
+
+## Passe à la pile suivante (saute les morts, applique le moral).
+func _suivant() -> void:
+	actif = null
+	while vainqueur == "":
+		var p = null
+		tour_bonus = false
+		if not file.is_empty():
+			p = file.pop_front()
+		elif not attente.is_empty():
+			p = attente.pop_front()
+		elif not bonus.is_empty():
+			p = bonus.pop_front()
+			tour_bonus = true
+		else:
+			_fin_round()
+			_demarrer_round()
+			continue
+		if not vivante(p):
+			continue
+		p["defend"] = false
+		if not tour_bonus and not p["a_attendu"]:
+			var m := moral(p)
+			if m < 5 and rng.randf() < (5 - m) * 0.1:
+				_log("%s hésite et passe son tour (moral %d)" % [p["u"]["nom"], m])
+				continue
+			if m > 5 and rng.randf() < (m - 5) * 0.1:
+				bonus.append(p)
+				_log("%s est galvanisé : il rejouera en fin de round" % p["u"]["nom"])
+		if tour_bonus:
+			_log("%s rejoue (moral)" % p["u"]["nom"])
+		actif = p
+		return
+
+
+func _verifier_fin() -> bool:
+	var camps := {}
+	for p in piles:
+		if vivante(p):
+			camps[p["camp"]] = true
+	if camps.size() == 1:
+		vainqueur = camps.keys()[0]
+		actif = null
+		_log("Victoire : %s" % ("Hommes-rats" if vainqueur == "HR" else "Garde"))
+		return true
+	return false
+
+
+func _terminer_action() -> void:
+	if not _verifier_fin():
+		_suivant()
+
+
+# --- Actions du joueur actif -------------------------------------------------
+
+func deplacer(c: Vector2i) -> bool:
+	if actif == null or not accessibles(actif).has(c):
+		return false
+	actif["pos"] = c
+	_terminer_action()
+	return true
+
+
+func attaquer(cible: Dictionary) -> bool:
+	if actif == null or not vivante(cible) or cible["camp"] == actif["camp"]:
+		return false
+	if peut_tirer(actif):
+		var d := distance_tir(actif["pos"], cible["pos"])
+		var mult := PENALITE_HORS_PORTEE if d > actif["u"]["portee"] else 1.0
+		actif["munitions"] -= 1
+		_frapper(actif, cible, mult, "tire sur" if mult == 1.0 else "tire de loin sur")
+		_terminer_action()
+		return true
+	var c = case_attaque(actif, cible, accessibles(actif))
+	if c == null:
+		return false
+	actif["pos"] = c
+	_frapper(actif, cible, PENALITE_CAC_TIREUR if tireur(actif) else 1.0, "attaque")
+	if vivante(cible) and vivante(actif) and not cible["a_riposte"]:
+		cible["a_riposte"] = true
+		_frapper(cible, actif, PENALITE_CAC_TIREUR if tireur(cible) else 1.0, "riposte sur")
+	_terminer_action()
+	return true
+
+
+func defendre() -> void:
+	if actif == null:
+		return
+	actif["defend"] = true
+	_log("%s se met en défense (+30 %% Déf)" % actif["u"]["nom"])
+	_suivant()
+
+
+func peut_attendre() -> bool:
+	return actif != null and not actif["a_attendu"] and not tour_bonus \
+		and not (file.is_empty() and attente.is_empty())
+
+
+func attendre() -> void:
+	if not peut_attendre():
+		return
+	actif["a_attendu"] = true
+	attente.append(actif)
+	_log("%s attend" % actif["u"]["nom"])
+	_suivant()
+
+
+# --- Dégâts ------------------------------------------------------------------
+
+func _frapper(att: Dictionary, cible: Dictionary, mult: float, verbe: String) -> void:
+	var u: Dictionary = att["u"]
+	var lo: int = u["deg"][0]
+	var hi: int = u["deg"][1]
+	var n := nombre(att)
+	var c: int = u["chance"]
+	var r := rng.randf()
+	var base := 0
+	var note := ""
+	if c > 5 and r < (c - 5) * 0.1:
+		base = hi * n
+		note = " (coup critique !)"
+	elif c < 5 and r < (5 - c) * 0.1:
+		base = lo * n
+		note = " (échec critique)"
+	else:
+		for i in n:
+			base += rng.randi_range(lo, hi)
+	var defense: float = cible["u"]["def"] * (BONUS_DEFENDRE if cible["defend"] else 1.0)
+	var mod := clampf(1.0 + (u["att"] - defense) / 10.0, MOD_MIN, MOD_MAX)
+	var degats := maxi(1, int(base * mod * mult))
+	var avant := nombre(cible)
+	cible["pv_total"] = maxi(0, cible["pv_total"] - degats)
+	var tues := avant - nombre(cible)
+	_log("%s %s %s : %d dégâts, %d tués%s" % [u["nom"], verbe, cible["u"]["nom"], degats, tues, note])
+	if not vivante(cible):
+		_log("%s est anéanti" % cible["u"]["nom"])
+
+
+func _log(m: String) -> void:
+	journal.append(m)
+	if journal.size() > 60:
+		journal.pop_front()
