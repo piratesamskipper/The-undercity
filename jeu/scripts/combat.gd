@@ -12,6 +12,7 @@ const PENALITE_HORS_PORTEE := 0.5
 const BONUS_DEFENDRE := 1.3
 const SEUIL_PERTES_MORAL := 0.2
 const DUREE_MALUS_MORAL := 3
+const ZONE_DEPLOIEMENT := 2   # colonnes de déploiement de chaque camp
 const BONUS_REVERS := 1.2      # attaque au corps à corps par l'arrière (pas pour le tir)
 
 var piles: Array = []
@@ -25,6 +26,7 @@ var debut_round := {}         # id de pile -> nombre au début du round
 var journal: Array = []       # messages pour le joueur
 var vainqueur := ""
 var rng := RandomNumberGenerator.new()
+var camps_gauche_droite: Array = []
 
 
 func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", camp_b := "G") -> void:
@@ -33,8 +35,41 @@ func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", c
 	for i in piles.size():
 		piles[i]["id"] = i
 		piles[i]["init"] = int(piles[i]["u"]["initiative"]) + rng.randi_range(1, 12)
+	camps_gauche_droite = [camp_a, camp_b]
+
+
+## Lance la bataille une fois le déploiement terminé.
+func commencer() -> void:
+	if round_num > 0:
+		return
 	_demarrer_round()
 	_suivant()
+
+
+# --- Déploiement -------------------------------------------------------------
+
+## Colonnes de la zone de déploiement d'un camp (son bord de grille).
+func zone_deploiement(camp: String) -> Array:
+	if camp == camps_gauche_droite[0]:
+		return range(0, ZONE_DEPLOIEMENT)
+	return range(COLONNES - ZONE_DEPLOIEMENT, COLONNES)
+
+
+func dans_zone(camp: String, c: Vector2i) -> bool:
+	return dans_grille(c) and zone_deploiement(camp).has(c.x)
+
+
+## Place une pile sur une case de sa zone ; échange avec une pile alliée déjà là.
+func replacer(p: Dictionary, c: Vector2i) -> bool:
+	if round_num > 0 or not dans_zone(p["camp"], c):
+		return false
+	var autre = pile_en(c)
+	if autre != null and autre["camp"] != p["camp"]:
+		return false
+	if autre != null:
+		autre["pos"] = p["pos"]
+	p["pos"] = c
+	return true
 
 
 # --- Piles -------------------------------------------------------------------

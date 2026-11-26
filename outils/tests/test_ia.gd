@@ -28,6 +28,7 @@ func serie(unites: Dictionary, ia_hr: bool, ia_g: bool, n: int) -> String:
 	var ms := 0
 	for i in n:
 		var c := Combat.new(unites, hr, g)
+		c.commencer()
 		var k := 0
 		while c.vainqueur == "" and k < 3000:
 			k += 1

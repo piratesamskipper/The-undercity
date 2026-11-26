@@ -24,6 +24,7 @@ const BOUTONS_MENU := {
 	"": Rect2(482, 450, 300, 60),       # deux joueurs sur le même téléphone
 }
 const DELAI_IA := 0.6
+const BOUTON_LANCER := Rect2(8, 600, 196, 70)
 
 var unites := {}
 var combat: Combat
@@ -34,6 +35,7 @@ var police: Font
 var menu := true
 var camp_ia := ""         # camp joué par l'IA ("" = deux joueurs)
 var attente_ia := 0.0
+var a_deployer: Array = []  # camps humains qui doivent encore valider leur déploiement
 
 
 func _ready() -> void:
@@ -45,7 +47,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if menu or combat.vainqueur != "" or not _tour_ia():
+	if menu or not a_deployer.is_empty() or combat.vainqueur != "" or not _tour_ia():
 		attente_ia = 0.0
 		return
 	attente_ia += delta
@@ -61,6 +63,12 @@ func _tour_ia() -> bool:
 
 func nouvelle_bataille() -> void:
 	combat = Combat.new(unites, ARMEE_HR, ARMEE_G)
+	a_deployer = []
+	for camp in ["HR", "G"]:
+		if camp != camp_ia:
+			a_deployer.append(camp)
+	if a_deployer.is_empty():
+		combat.commencer()
 	selection = null
 	cible = null
 	message = ""
@@ -109,6 +117,8 @@ func _draw() -> void:
 			var fond := Color(0.16, 0.16, 0.15) if (l + c) % 2 == 0 else Color(0.19, 0.19, 0.18)
 			if reach.has(case):
 				fond = fond.lerp(COULEURS[actif["camp"]], 0.35)
+			if not a_deployer.is_empty() and combat.dans_zone(a_deployer[0], case):
+				fond = fond.lerp(COULEURS[a_deployer[0]], 0.3)
 			if cases_cible.has(case):
 				fond = Color(0.75, 0.6, 0.15) if Combat.a_revers(cible, case) else Color(0.25, 0.55, 0.3)
 			draw_rect(Rect2(_case_vers_ecran(case), Vector2.ONE * TAILLE_CASE), fond)
@@ -184,28 +194,25 @@ func _dessiner_panneau_gauche() -> void:
 	var x := 8.0
 	var w := LARGEUR_PANNEAU - 4
 	var actif = combat.actif
+	if not a_deployer.is_empty():
+		var camp: String = a_deployer[0]
+		draw_string(police, Vector2(x, 30), NOMS_CAMPS[camp] + " : placement",
+				HORIZONTAL_ALIGNMENT_LEFT, w, 16, COULEURS[camp].lightened(0.4))
+		if selection != null:
+			_dessiner_stats(selection, x, w)
+		draw_multiline_string(police, Vector2(x, 400),
+				"Touche une de tes piles, puis une case de ta zone (teintée) pour l'y placer. Sur une autre de tes piles, elles échangent leur place.",
+				HORIZONTAL_ALIGNMENT_LEFT, w, 13, -1, Color(0.6, 0.6, 0.55))
+		var dernier := a_deployer.size() == 1
+		_bouton(BOUTON_LANCER, "Lancer le combat" if dernier else "Valider", true)
+		return
 	if actif != null:
 		var qui: String = NOMS_CAMPS[actif["camp"]] + (" (IA)" if actif["camp"] == camp_ia else "")
 		draw_string(police, Vector2(x, 30), "Au tour : " + qui,
 				HORIZONTAL_ALIGNMENT_LEFT, w, 16, COULEURS[actif["camp"]].lightened(0.4))
 	var p = selection if selection != null else actif
 	if p != null:
-		var u: Dictionary = p["u"]
-		var lignes := [
-			u["nom"],
-			"%s · Tier %d" % [NOMS_CAMPS[p["camp"]], u["tier"]],
-			"Créatures %d / %d" % [Combat.nombre(p), u["escouade"]],
-			"PV %d (dessus %d)" % [u["pv"], Combat.pv_dessus(p)],
-			"Att %d · Déf %d" % [u["att"], u["def"]],
-			"Dégâts %d-%d" % [u["deg"][0], u["deg"][1]],
-			"Vitesse %d · Init %d" % [u["vitesse"], p["init"]],
-			"Moral %d · Chance %d" % [combat.moral(p), u["chance"]],
-		]
-		if Combat.tireur(p):
-			lignes.append("Portée %d · Munitions %d" % [u["portee"], p["munitions"]])
-		for i in lignes.size():
-			draw_string(police, Vector2(x, 64 + i * 25), lignes[i], HORIZONTAL_ALIGNMENT_LEFT, w,
-					17 if i == 0 else 15, Color.WHITE if i == 0 else Color(0.85, 0.85, 0.8))
+		_dessiner_stats(p, x, w)
 	if message != "":
 		draw_multiline_string(police, Vector2(x, 330), message, HORIZONTAL_ALIGNMENT_LEFT, w, 14, -1,
 				Color(1, 0.6, 0.4))
@@ -222,7 +229,7 @@ func _dessiner_panneau_gauche() -> void:
 func _dessiner_panneau_droit() -> void:
 	var x := PANNEAU_DROIT
 	var w := 1280.0 - PANNEAU_DROIT - 6
-	draw_string(police, Vector2(x, 30), "Round %d" % combat.round_num, HORIZONTAL_ALIGNMENT_LEFT, w, 17,
+	draw_string(police, Vector2(x, 30), "Round %d" % combat.round_num if combat.round_num > 0 else "Déploiement", HORIZONTAL_ALIGNMENT_LEFT, w, 17,
 			Color(0.85, 0.85, 0.8))
 	# Ordre à venir
 	var ordre := []
@@ -275,6 +282,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if BOUTON_REJOUER.has_point(pos):
 			menu = true
 			queue_redraw()
+		return
+	if not a_deployer.is_empty():
+		_toucher_deploiement(pos)
+		queue_redraw()
 		return
 	if _tour_ia():
 		return
@@ -329,3 +340,44 @@ func _toucher_case(c: Vector2i) -> void:
 			message = "Cible hors d'atteinte ce tour-ci."
 	else:
 		selection = null if p["id"] == actif["id"] else p
+
+
+func _dessiner_stats(p: Dictionary, x: float, w: float) -> void:
+	var u: Dictionary = p["u"]
+	var lignes := [
+		u["nom"],
+		"%s · Tier %d" % [NOMS_CAMPS[p["camp"]], u["tier"]],
+		"Créatures %d / %d" % [Combat.nombre(p), u["escouade"]],
+		"PV %d (dessus %d)" % [u["pv"], Combat.pv_dessus(p)],
+		"Att %d · Déf %d" % [u["att"], u["def"]],
+		"Dégâts %d-%d" % [u["deg"][0], u["deg"][1]],
+		"Vitesse %d · Init %d" % [u["vitesse"], p["init"]],
+		"Moral %d · Chance %d" % [combat.moral(p), u["chance"]],
+	]
+	if Combat.tireur(p):
+		lignes.append("Portée %d · Munitions %d" % [u["portee"], p["munitions"]])
+	for i in lignes.size():
+		draw_string(police, Vector2(x, 64 + i * 25), lignes[i], HORIZONTAL_ALIGNMENT_LEFT, w,
+				17 if i == 0 else 15, Color.WHITE if i == 0 else Color(0.85, 0.85, 0.8))
+
+
+func _toucher_deploiement(pos: Vector2) -> void:
+	var camp: String = a_deployer[0]
+	if BOUTON_LANCER.has_point(pos):
+		a_deployer.pop_front()
+		selection = null
+		if a_deployer.is_empty():
+			combat.commencer()
+		return
+	var c := _ecran_vers_case(pos)
+	if not Combat.dans_grille(c):
+		return
+	var p = combat.pile_en(c)
+	if selection != null and selection["camp"] == camp and combat.dans_zone(camp, c) \
+			and (p == null or p["camp"] == camp) and (p == null or p["id"] != selection["id"]):
+		combat.replacer(selection, c)
+		selection = null
+	elif p != null:
+		selection = p
+	else:
+		selection = null

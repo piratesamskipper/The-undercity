@@ -14,6 +14,7 @@ func _initialize():
 	var revers := 0
 	for n in 300:
 		var c := Combat.new(unites, hr, g)
+		c.commencer()
 		var actions := 0
 		while c.vainqueur == "" and actions < 3000:
 			actions += 1
