@@ -100,10 +100,12 @@ def tour(pile, cible, etat, rng):
 def combat(ua, ub, rng):
     a, b = Pile(ua), Pile(ub)
     etat = {"distance": DISTANCE_DEPART}
+    for p in (a, b):
+        p.init = p.u["initiative"] + rng.randint(1, 12)  # tirée une fois par bataille
     for r in range(1, ROUNDS_MAX + 1):
         debut = {id(a): a.nombre, id(b): b.nombre}
         a.a_riposte = b.a_riposte = False
-        ordre = sorted([a, b], key=lambda p: (p.u["initiative"], rng.random()), reverse=True)
+        ordre = sorted([a, b], key=lambda p: (p.init, rng.random()), reverse=True)
         bonus = []
         for p in ordre:
             if not (a.vivante and b.vivante):

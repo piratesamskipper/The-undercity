@@ -4,7 +4,8 @@ Usage : python3 armee.py [nb_batailles] [multiplicateur_degats]
 
 Hypothèses du modèle (non tranchées dans le GDD) :
 - déplacement en 8 directions, une diagonale coûte 1,5 ; on ne traverse pas les piles ;
-- portée de tir et contact mesurés en cases (diagonale = 1) ;
+- portée de tir : diagonale = 1,5 ; contact = case voisine, diagonale comprise ;
+- initiative = stat + 1d12, tirée une fois par bataille ;
 - pas d'obstacles ni de chef ; pas de Défendre / Attendre ;
 - IA simple : les tireurs tirent sur la pile ennemie la plus dangereuse à portée
   (sinon la plus dangereuse tout court, à x0,5) ; les unités de mêlée attaquent
@@ -37,6 +38,12 @@ class PileG(Pile):
 
 def dist(a, b):
     return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
+
+
+def dist_tir(a, b):
+    """Distance de tir : diagonale = COUT_DIAGONALE."""
+    dl, dc = abs(a[0] - b[0]), abs(a[1] - b[1])
+    return max(dl, dc) + (COUT_DIAGONALE - 1) * min(dl, dc)
 
 
 def voisins(c):
@@ -97,9 +104,9 @@ def jouer(p, piles, rng):
             attaque(p, max(adjacents, key=menace), rng)
             return
         if p.munitions > 0:
-            a_portee = [e for e in ennemis if dist(p.pos, e.pos) <= p.u["portee"]]
+            a_portee = [e for e in ennemis if dist_tir(p.pos, e.pos) <= p.u["portee"]]
             cible = max(a_portee or ennemis, key=menace)
-            attaque(p, cible, rng, dist(p.pos, cible.pos))
+            attaque(p, cible, rng, dist_tir(p.pos, cible.pos))
             return
     occupees = {q.pos for q in piles if q.vivante and q is not p}
     reach = accessibles(p, occupees)
@@ -137,13 +144,15 @@ def deployer(compo, camp, unites, mult):
 
 def bataille(unites, rng, mult):
     piles = deployer(COMPO_HR, "HR", unites, mult) + deployer(COMPO_G, "G", unites, mult)
+    for p in piles:
+        p.init = p.u["initiative"] + rng.randint(1, 12)  # tirée une fois par bataille
     premier = None
     for r in range(1, ROUNDS_MAX + 1):
         debut = {id(p): p.nombre for p in piles}
         for p in piles:
             p.a_riposte = False
         ordre = sorted([p for p in piles if p.vivante],
-                       key=lambda p: (p.u["initiative"], rng.random()), reverse=True)
+                       key=lambda p: (p.init, rng.random()), reverse=True)
         bonus = []
         for p in ordre:
             if not p.vivante:
