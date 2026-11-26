@@ -152,7 +152,7 @@ def duel(ua, ub, n, rng):
 
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
-    unites = json.loads((Path(__file__).parent / "unites.json").read_text())
+    unites = json.loads((Path(__file__).resolve().parents[2] / "jeu" / "donnees" / "unites.json").read_text())
     rng = random.Random(42)
     court = lambda u: u["nom"][:14]
 

@@ -6,7 +6,7 @@ Simule des duels entre deux piles pleines avec les règles du GDD : formule d'at
 python3 simulation.py 2000
 ```
 
-Les unités sont dans `unites.json`, recopiées depuis le tableau du GDD.
+Les unités sont dans `jeu/donnees/unites.json` (partagé avec le jeu), recopiées depuis le tableau du GDD.
 
 Pour les batailles armée contre armée sur la grille 8×10 (compositions en haut du fichier) :
 

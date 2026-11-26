@@ -186,7 +186,7 @@ def bataille(unites, rng, mult):
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
     mult = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
-    unites = json.loads((Path(__file__).parent / "unites.json").read_text())
+    unites = json.loads((Path(__file__).resolve().parents[2] / "jeu" / "donnees" / "unites.json").read_text())
     rng = random.Random(7)
     res = {"HR": 0, "G": 0, "N": 0}
     rounds = 0
