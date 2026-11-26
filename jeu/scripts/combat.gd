@@ -12,7 +12,7 @@ const PENALITE_HORS_PORTEE := 0.5
 const BONUS_DEFENDRE := 1.3
 const SEUIL_PERTES_MORAL := 0.2
 const DUREE_MALUS_MORAL := 3
-const BONUS_REVERS := 1.2      # attaque au corps à corps par l'arrière (valeur provisoire)
+const BONUS_REVERS := 1.2      # attaque au corps à corps par l'arrière (pas pour le tir)
 
 var piles: Array = []
 var round_num := 0
@@ -321,6 +321,7 @@ func attaquer(cible: Dictionary, depuis = null) -> bool:
 	_frapper(actif, cible, mult, verbe)
 	if vivante(cible) and vivante(actif) and not cible["a_riposte"]:
 		cible["a_riposte"] = true
+		cible["orient"] = direction(cible["pos"], actif["pos"])  # elle se tourne pour riposter
 		_frapper(cible, actif, PENALITE_CAC_TIREUR if tireur(cible) else 1.0, "riposte sur")
 	_terminer_action()
 	return true
