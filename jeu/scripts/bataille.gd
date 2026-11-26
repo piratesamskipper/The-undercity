@@ -1,6 +1,6 @@
 extends Node2D
 ## Écran de bataille : affiche un Combat et transmet les touchers du joueur.
-## Pour l'instant les deux camps sont joués à la main (chacun son tour).
+## Au départ, un menu permet de choisir son camp (l'autre est joué par l'IA) ou de jouer à deux.
 
 const TAILLE_CASE := 60.0
 const ORIGINE := Vector2(212, 60)
@@ -18,6 +18,12 @@ const ARMEE_G := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3]
 const BOUTON_DEFENDRE := Rect2(8, 570, 196, 56)
 const BOUTON_ATTENDRE := Rect2(8, 638, 196, 56)
 const BOUTON_REJOUER := Rect2(532, 400, 200, 60)
+const BOUTONS_MENU := {
+	"G": Rect2(482, 300, 300, 60),      # le joueur prend les Hommes-rats, l'IA la Garde
+	"HR": Rect2(482, 375, 300, 60),     # le joueur prend la Garde, l'IA les Hommes-rats
+	"": Rect2(482, 450, 300, 60),       # deux joueurs sur le même téléphone
+}
+const DELAI_IA := 0.6
 
 var unites := {}
 var combat: Combat
@@ -25,6 +31,9 @@ var selection = null      # pile dont on affiche les stats (sinon l'actif)
 var cible = null          # ennemi visé au corps à corps : on choisit ensuite la case d'attaque
 var message := ""         # retour au joueur (action impossible, etc.)
 var police: Font
+var menu := true
+var camp_ia := ""         # camp joué par l'IA ("" = deux joueurs)
+var attente_ia := 0.0
 
 
 func _ready() -> void:
@@ -33,6 +42,21 @@ func _ready() -> void:
 	for u in JSON.parse_string(texte):
 		unites[u["nom"]] = u
 	nouvelle_bataille()
+
+
+func _process(delta: float) -> void:
+	if menu or combat.vainqueur != "" or not _tour_ia():
+		attente_ia = 0.0
+		return
+	attente_ia += delta
+	if attente_ia >= DELAI_IA:
+		attente_ia = 0.0
+		IA.jouer(combat)
+		queue_redraw()
+
+
+func _tour_ia() -> bool:
+	return combat.actif != null and camp_ia != "" and combat.actif["camp"] == camp_ia
 
 
 func nouvelle_bataille() -> void:
@@ -132,8 +156,21 @@ func _draw() -> void:
 
 	_dessiner_panneau_gauche()
 	_dessiner_panneau_droit()
-	if combat.vainqueur != "":
+	if menu:
+		_dessiner_menu()
+	elif combat.vainqueur != "":
 		_dessiner_fin()
+
+
+func _dessiner_menu() -> void:
+	draw_rect(Rect2(Vector2.ZERO, Vector2(1280, 720)), Color(0, 0, 0, 0.75))
+	draw_string(police, Vector2(0, 220), "The Undercity", HORIZONTAL_ALIGNMENT_CENTER, 1280, 40,
+			Color(0.9, 0.85, 0.7))
+	draw_string(police, Vector2(0, 262), "Prototype du combat en grille", HORIZONTAL_ALIGNMENT_CENTER, 1280, 18,
+			Color(0.65, 0.65, 0.6))
+	_bouton(BOUTONS_MENU["G"], "Jouer les Hommes-rats", true)
+	_bouton(BOUTONS_MENU["HR"], "Jouer la Garde", true)
+	_bouton(BOUTONS_MENU[""], "Deux joueurs", true)
 
 
 func _bouton(r: Rect2, texte: String, actif: bool) -> void:
@@ -148,7 +185,8 @@ func _dessiner_panneau_gauche() -> void:
 	var w := LARGEUR_PANNEAU - 4
 	var actif = combat.actif
 	if actif != null:
-		draw_string(police, Vector2(x, 30), "Au tour : " + NOMS_CAMPS[actif["camp"]],
+		var qui: String = NOMS_CAMPS[actif["camp"]] + (" (IA)" if actif["camp"] == camp_ia else "")
+		draw_string(police, Vector2(x, 30), "Au tour : " + qui,
 				HORIZONTAL_ALIGNMENT_LEFT, w, 16, COULEURS[actif["camp"]].lightened(0.4))
 	var p = selection if selection != null else actif
 	if p != null:
@@ -171,7 +209,7 @@ func _dessiner_panneau_gauche() -> void:
 	if message != "":
 		draw_multiline_string(police, Vector2(x, 330), message, HORIZONTAL_ALIGNMENT_LEFT, w, 14, -1,
 				Color(1, 0.6, 0.4))
-	if actif != null:
+	if actif != null and not _tour_ia():
 		var aide := "Touche une case pour bouger.\nTouche un ennemi encadré pour le viser, puis la case d'où frapper (dorée = de dos), ou l'ennemi à nouveau pour frapper au plus court."
 		if combat.peut_tirer(actif):
 			aide = "Touche une case pour bouger.\nTouche un ennemi pour tirer (orange = hors de portée, x0,5)."
@@ -226,9 +264,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var pos: Vector2 = event.position
 	message = ""
+	if menu:
+		for camp in BOUTONS_MENU:
+			if BOUTONS_MENU[camp].has_point(pos):
+				camp_ia = camp
+				menu = false
+				nouvelle_bataille()
+		return
 	if combat.vainqueur != "":
 		if BOUTON_REJOUER.has_point(pos):
-			nouvelle_bataille()
+			menu = true
+			queue_redraw()
+		return
+	if _tour_ia():
 		return
 	if BOUTON_DEFENDRE.has_point(pos):
 		selection = null
