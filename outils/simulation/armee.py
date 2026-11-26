@@ -3,7 +3,8 @@
 Usage : python3 armee.py [nb_batailles] [multiplicateur_degats]
 
 Hypothèses du modèle (non tranchées dans le GDD) :
-- déplacement en 8 directions (diagonales comprises), on ne traverse pas les piles ;
+- déplacement en 8 directions, une diagonale coûte 1,5 ; on ne traverse pas les piles ;
+- portée de tir et contact mesurés en cases (diagonale = 1) ;
 - pas d'obstacles ni de chef ; pas de Défendre / Attendre ;
 - IA simple : les tireurs tirent sur la pile ennemie la plus dangereuse à portée
   (sinon la plus dangereuse tout court, à x0,5) ; les unités de mêlée attaquent
@@ -22,9 +23,10 @@ from simulation import (Pile, degats, PENALITE_CAC_TIREUR, PENALITE_HORS_PORTEE,
 LIGNES, COLONNES = 8, 10
 ROUNDS_MAX = 30
 
-COMPO_HR = [("Esclave du père des rats", 3), ("Frondeur des égouts", 3),
+COMPO_HR = [("Esclave du père des rats", 2), ("Frondeur des égouts", 2),
             ("Surineurs", 3), ("Rats mutés", 1)]
-COMPO_G = [("Bleusaille", 4), ("Arbalétriers", 2), ("Soldats du cru", 3), ("Vétérans", 2)]
+COMPO_G = [("Bleusaille", 2), ("Arbalétriers", 2), ("Soldats du cru", 3), ("Vétérans", 1)]
+COUT_DIAGONALE = 1.5
 
 
 class PileG(Pile):
@@ -47,17 +49,21 @@ def voisins(c):
 
 
 def accessibles(p, occupees):
-    """Cases atteignables (distance de marche) depuis p.pos."""
-    vu = {p.pos: 0}
-    f = deque([p.pos])
-    while f:
-        c = f.popleft()
-        if vu[c] == p.u["vitesse"]:
+    """Cases atteignables : coût 1 en ligne droite, COUT_DIAGONALE en diagonale."""
+    import heapq
+    vu = {p.pos: 0.0}
+    tas = [(0.0, p.pos)]
+    while tas:
+        d, c = heapq.heappop(tas)
+        if d > vu[c]:
             continue
         for v in voisins(c):
-            if v not in vu and v not in occupees:
-                vu[v] = vu[c] + 1
-                f.append(v)
+            if v in occupees:
+                continue
+            nd = d + (COUT_DIAGONALE if v[0] != c[0] and v[1] != c[1] else 1)
+            if nd <= p.u["vitesse"] and nd < vu.get(v, 99):
+                vu[v] = nd
+                heapq.heappush(tas, (nd, v))
     return vu
 
 
