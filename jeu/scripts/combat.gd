@@ -20,7 +20,7 @@ const ROUNDS_MAX := 8
 const PV_ZONE := 1             # points par tranche de 2 rounds de contrôle d'une zone
 const ROUNDS_PAR_POINT_ZONE := 2
 const PV_SEIGNEUR := 2
-const PV_ANNIHILATION := 10
+const PV_ANNIHILATION := 5
 const BONUS_REVERS := 1.2      # attaque au corps à corps par l'arrière (pas pour le tir)
 
 var piles: Array = []
