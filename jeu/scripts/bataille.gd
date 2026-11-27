@@ -9,6 +9,7 @@ const LARGEUR_PANNEAU := 200.0
 
 const COULEURS := {"HR": Color(0.55, 0.32, 0.2), "G": Color(0.22, 0.38, 0.62)}
 const NOMS_CAMPS := {"HR": "Hommes-rats", "G": "Garde"}
+const NOMS_CAPACITES := {"bond": "Bond (saute 1 case de trou)"}
 
 # Compositions de test (identiques à la simulation équilibrée).
 const ARMEE_HR := [["Esclave du père des rats", 2], ["Frondeur des égouts", 2],
@@ -383,6 +384,8 @@ func _dessiner_stats(p: Dictionary, x: float, w: float) -> void:
 	]
 	if Combat.tireur(p):
 		lignes.append("Portée %d · Munitions %d" % [u["portee"], p["munitions"]])
+	if not u.get("capacites", []).is_empty():
+		lignes.append("Capacité : " + ", ".join(u["capacites"].map(func(c): return NOMS_CAPACITES.get(c, c))))
 	if Combat.seigneur(p):
 		lignes[1] = "%s · Seigneur" % NOMS_CAMPS[p["camp"]]
 		lignes[2] = "PV %d / %d" % [p["pv_total"], u["pv"]]

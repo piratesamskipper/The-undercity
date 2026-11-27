@@ -133,6 +133,10 @@ static func pv_dessus(p: Dictionary) -> int:
 	return reste if reste > 0 else int(p["u"]["pv"])
 
 
+static func a_capacite(p: Dictionary, capacite: String) -> bool:
+	return p["u"].get("capacites", []).has(capacite)
+
+
 static func seigneur(p: Dictionary) -> bool:
 	return p["u"].get("seigneur", false)
 
@@ -218,12 +222,19 @@ func accessibles(p: Dictionary) -> Dictionary:
 				meilleur = i
 		var c: Vector2i = a_traiter.pop_at(meilleur)
 		for v in voisins(c):
-			if pile_en(v) != null or bloquee(v):
-				continue
+			var cible_pas: Vector2i = v
 			var nd: float = couts[c] + cout_pas(c, v)
-			if nd <= vitesse and nd < couts.get(v, INF):
-				couts[v] = nd
-				a_traiter.append(v)
+			# Bond : franchir une seule case de trou, en ligne droite ou en diagonale
+			if terrain.get(v, "") == "trou" and a_capacite(p, "bond"):
+				cible_pas = v + (v - c)
+				nd += cout_pas(v, cible_pas)
+				if not dans_grille(cible_pas):
+					continue
+			if pile_en(cible_pas) != null or bloquee(cible_pas):
+				continue
+			if nd <= vitesse and nd < couts.get(cible_pas, INF):
+				couts[cible_pas] = nd
+				a_traiter.append(cible_pas)
 	couts.erase(p["pos"])
 	return couts
 

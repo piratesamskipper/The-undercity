@@ -1,7 +1,7 @@
 [
   {"nom": "Esclave du père des rats", "faction": "HR", "tier": 1, "pv": 5, "att": 2, "def": 2, "deg": [1, 3], "vitesse": 6, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 60},
   {"nom": "Frondeur des égouts", "faction": "HR", "tier": 1, "pv": 4, "att": 3, "def": 1, "deg": [2, 4], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 6, "munitions": 3, "escouade": 60},
-  {"nom": "Surineurs", "faction": "HR", "tier": 2, "pv": 6, "att": 5, "def": 2, "deg": [5, 7], "vitesse": 7, "initiative": 12, "moral": 6, "chance": 5, "portee": 0, "munitions": 0, "escouade": 40},
+  {"nom": "Surineurs", "faction": "HR", "tier": 2, "pv": 6, "att": 5, "def": 2, "deg": [5, 7], "vitesse": 7, "initiative": 12, "moral": 6, "chance": 5, "portee": 0, "munitions": 0, "escouade": 40, "capacites": ["bond"]},
   {"nom": "Rats mutés", "faction": "HR", "tier": 3, "pv": 20, "att": 8, "def": 6, "deg": [10, 15], "vitesse": 6, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 20},
   {"nom": "Bleusaille", "faction": "G", "tier": 1, "pv": 7, "att": 3, "def": 3, "deg": [2, 6], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 30},
   {"nom": "Arbalétriers", "faction": "G", "tier": 2, "pv": 8, "att": 5, "def": 3, "deg": [7, 10], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 7, "munitions": 5, "escouade": 20},
