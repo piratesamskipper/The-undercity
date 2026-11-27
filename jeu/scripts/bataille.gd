@@ -28,6 +28,7 @@ const DELAI_IA := 0.6
 const TERRAINS := {
 	"mur": [Color(0.42, 0.4, 0.37), 1.0, "Mur : infranchissable, bloque la ligne de vue."],
 	"obstacle": [Color(0.36, 0.27, 0.17), 0.85, "Obstacle : infranchissable, ne bloque pas les tirs."],
+	"trou": [Color(0.0, 0.0, 0.0), 0.9, "Trou : infranchissable, ne bloque pas les tirs."],
 	"eau": [Color(0.15, 0.32, 0.5), 0.6, "Eau : une case coûte 2 de vitesse (3 en diagonale)."],
 	"toxique": [Color(0.3, 0.5, 0.12), 0.6, "Égout toxique : -5 % des PV en fin de round pour la pile qui s'y trouve."],
 	"sombre": [Color(0.06, 0.03, 0.12), 0.7, "Zone sombre : tir vers ou depuis cette case x0,75."],
@@ -437,6 +438,9 @@ func _dessiner_terrain(case: Vector2i, type: String) -> void:
 			draw_line(r.position + Vector2(14, 14), r.end - Vector2(14, 14), Color(0.55, 0.42, 0.25), 4.0)
 			draw_line(Vector2(r.end.x - 14, r.position.y + 14), Vector2(r.position.x + 14, r.end.y - 14),
 					Color(0.55, 0.42, 0.25), 4.0)
+		"trou":
+			draw_circle(r.get_center(), TAILLE_CASE * 0.38, Color(0, 0, 0))
+			draw_arc(r.get_center(), TAILLE_CASE * 0.38, 0, TAU, 24, Color(0.35, 0.3, 0.25), 2.0)
 		"eau":
 			for k in 2:
 				var y := r.position.y + 22 + k * 16

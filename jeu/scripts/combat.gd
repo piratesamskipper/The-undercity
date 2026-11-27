@@ -30,7 +30,8 @@ var journal: Array = []       # messages pour le joueur
 var vainqueur := ""
 var rng := RandomNumberGenerator.new()
 var camps_gauche_droite: Array = []
-var terrain := {}             # case -> "mur" | "obstacle" | "eau" | "toxique" | "sombre"
+var terrain := {}             # case -> "mur" | "obstacle" | "trou" | "eau" | "toxique" | "sombre"
+var types_carte: Array = []   # types de terrain présents sur cette carte
 var seigneur_mort := {}       # camp -> vrai si son seigneur est tombé
 var points_victoire := {}     # camp -> points de victoire
 
@@ -480,7 +481,7 @@ func _log(m: String) -> void:
 # --- Terrain -----------------------------------------------------------------
 
 static func bloque_type(t: String) -> bool:
-	return t == "mur" or t == "obstacle"
+	return t == "mur" or t == "obstacle" or t == "trou"
 
 
 func bloquee(c: Vector2i) -> bool:
@@ -549,23 +550,29 @@ func generer_terrain() -> void:
 		terrain.clear()
 		var moitie := COLONNES / 2
 		var col_min := ZONE_DEPLOIEMENT + 1
-		# murs : 2 segments de 2 à 3 cases
-		for i in 2:
-			var c := Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(1, LIGNES - 2))
-			var dir := Vector2i(0, 1) if rng.randf() < 0.6 else Vector2i(1, 0)
-			for k in rng.randi_range(2, 3):
-				_poser(c + dir * k, "mur")
-		# obstacles isolés
-		for i in rng.randi_range(2, 3):
-			_poser(Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(0, LIGNES - 1)), "obstacle")
-		# taches d'eau, d'égout toxique et de zone sombre
-		for type in ["eau", "toxique", "sombre"]:
-			var centre := Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(0, LIGNES - 1))
-			var taille := rng.randi_range(2, 4) if type != "sombre" else 4
-			for k in taille:
-				var c: Vector2i = centre + Vector2i(rng.randi_range(-1, 1), rng.randi_range(-1, 1))
-				if not terrain.has(c):
-					_poser(c, type)
+		# chaque carte n'utilise que 2 à 4 types de terrain, tirés au hasard
+		var types := ["mur", "obstacle", "trou", "eau", "toxique", "sombre"]
+		types.shuffle()
+		types = types.slice(0, rng.randi_range(2, 4))
+		types_carte = types
+		for type in types:
+			match type:
+				"mur":   # 2 segments de 2 à 3 cases
+					for i in 2:
+						var c := Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(1, LIGNES - 2))
+						var dir := Vector2i(0, 1) if rng.randf() < 0.6 else Vector2i(1, 0)
+						for k in rng.randi_range(2, 3):
+							_poser(c + dir * k, "mur")
+				"obstacle":   # cases isolées
+					for i in rng.randi_range(2, 3):
+						_poser(Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(0, LIGNES - 1)), "obstacle")
+				_:   # taches : trou, eau, égout toxique, zone sombre
+					var centre := Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(0, LIGNES - 1))
+					var taille := 4 if type == "sombre" else rng.randi_range(2, 4)
+					for k in taille:
+						var c: Vector2i = centre + Vector2i(rng.randi_range(-1, 1), rng.randi_range(-1, 1))
+						if not terrain.has(c):
+							_poser(c, type)
 		# symétrie
 		for c in terrain.keys():
 			terrain[Vector2i(COLONNES - 1 - c.x, c.y)] = terrain[c]
