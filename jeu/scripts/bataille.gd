@@ -36,6 +36,9 @@ var menu := true
 var camp_ia := ""         # camp joué par l'IA ("" = deux joueurs)
 var attente_ia := 0.0
 var a_deployer: Array = []  # camps humains qui doivent encore valider leur déploiement
+# Pendant le déploiement, l'initiative adverse est cachée. Plus tard, une capacité
+# spéciale de seigneur pourra la révéler : ce drapeau en tiendra lieu.
+var voir_init_adverse := false
 
 
 func _ready() -> void:
@@ -197,7 +200,7 @@ func _dessiner_panneau_gauche() -> void:
 	if not a_deployer.is_empty():
 		var camp: String = a_deployer[0]
 		draw_string(police, Vector2(x, 30), NOMS_CAMPS[camp] + " : placement",
-				HORIZONTAL_ALIGNMENT_LEFT, w, 16, COULEURS[camp].lightened(0.4))
+				HORIZONTAL_ALIGNMENT_LEFT, w, 14, COULEURS[camp].lightened(0.4))
 		if selection != null:
 			_dessiner_stats(selection, x, w)
 		draw_multiline_string(police, Vector2(x, 400),
@@ -351,7 +354,7 @@ func _dessiner_stats(p: Dictionary, x: float, w: float) -> void:
 		"PV %d (dessus %d)" % [u["pv"], Combat.pv_dessus(p)],
 		"Att %d · Déf %d" % [u["att"], u["def"]],
 		"Dégâts %d-%d" % [u["deg"][0], u["deg"][1]],
-		"Vitesse %d · Init %d" % [u["vitesse"], p["init"]],
+		"Vitesse %d · Init %s" % [u["vitesse"], _init_visible(p)],
 		"Moral %d · Chance %d" % [combat.moral(p), u["chance"]],
 	]
 	if Combat.tireur(p):
@@ -381,3 +384,10 @@ func _toucher_deploiement(pos: Vector2) -> void:
 		selection = p
 	else:
 		selection = null
+
+
+## Initiative affichée : cachée pour l'adversaire pendant le déploiement.
+func _init_visible(p: Dictionary) -> String:
+	if not a_deployer.is_empty() and p["camp"] != a_deployer[0] and not voir_init_adverse:
+		return "?"
+	return str(p["init"])
