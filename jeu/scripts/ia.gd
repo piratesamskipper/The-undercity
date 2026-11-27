@@ -27,7 +27,11 @@ static func menace(p: Dictionary) -> float:
 static func valeur_coup(degats: float, cible: Dictionary) -> float:
 	var part := minf(degats, cible["pv_total"]) / float(cible["pv_total"])
 	var bonus_achevement := 0.3 if degats >= cible["pv_total"] else 0.0
-	return (part + bonus_achevement) * menace(cible)
+	var valeur := (part + bonus_achevement) * menace(cible)
+	if Combat.seigneur(cible):
+		# tuer le seigneur : point de victoire et moral −1 pour toute son armée
+		valeur += part * 150.0 + (300.0 if degats >= cible["pv_total"] else 0.0)
+	return valeur
 
 
 static func jouer(c: Combat) -> void:

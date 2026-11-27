@@ -5,8 +5,8 @@ func _initialize():
 	var unites := {}
 	for u in JSON.parse_string(FileAccess.get_file_as_string("res://donnees/unites.json")):
 		unites[u["nom"]] = u
-	var hr := [["Esclave du père des rats", 2], ["Frondeur des égouts", 2], ["Surineurs", 3], ["Rats mutés", 1]]
-	var g := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3], ["Vétérans", 2]]
+	var hr := [["Esclave du père des rats", 2], ["Frondeur des égouts", 2], ["Surineurs", 3], ["Rats mutés", 1], ["Seigneur des Hommes-rats", 1]]
+	var g := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3], ["Vétérans", 2], ["Seigneur de la Garde", 1]]
 	var rng := RandomNumberGenerator.new()
 	var victoires := {"HR": 0, "G": 0, "": 0}
 	var rounds := 0

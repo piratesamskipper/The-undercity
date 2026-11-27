@@ -27,6 +27,8 @@ var journal: Array = []       # messages pour le joueur
 var vainqueur := ""
 var rng := RandomNumberGenerator.new()
 var camps_gauche_droite: Array = []
+var seigneur_mort := {}       # camp -> vrai si son seigneur est tombé
+var points_victoire := {}     # camp -> points de victoire
 
 
 func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", camp_b := "G") -> void:
@@ -79,13 +81,19 @@ func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> 
 	var avant := 1 if gauche else COLONNES - 2
 	var tireurs := []
 	var melee := []
+	var seigneurs := []
 	for entree in compo:
 		var u: Dictionary = unites[entree[0]]
 		for i in entree[1]:
-			(tireurs if u["portee"] > 0 else melee).append(u)
+			if u.get("seigneur", false):
+				seigneurs.append(u)
+			else:
+				(tireurs if u["portee"] > 0 else melee).append(u)
 	var res := []
 	var ligne_avant := melee.slice(0, LIGNES)
-	var ligne_arriere := tireurs + melee.slice(LIGNES)
+	# le seigneur se place au milieu de la ligne arrière, entre les tireurs
+	var ligne_arriere := tireurs.slice(0, tireurs.size() / 2) + seigneurs \
+		+ tireurs.slice(tireurs.size() / 2) + melee.slice(LIGNES)
 	for colonne in [[ligne_avant, avant], [ligne_arriere, arriere]]:
 		var liste: Array = colonne[0]
 		var debut := (LIGNES - liste.size()) / 2
@@ -97,6 +105,7 @@ func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> 
 				"munitions": int(u["munitions"]), "malus": [], "a_riposte": false,
 				"defend": false, "a_attendu": false,
 				"orient": Vector2i(1, 0) if gauche else Vector2i(-1, 0),
+				"mana": int(u.get("intelligence", 0)) * 10,
 			})
 	return res
 
@@ -118,15 +127,38 @@ static func pv_dessus(p: Dictionary) -> int:
 	return reste if reste > 0 else int(p["u"]["pv"])
 
 
+static func seigneur(p: Dictionary) -> bool:
+	return p["u"].get("seigneur", false)
+
+
+## Multiplicateur des sorts : puissance magique / 10 + 1.
+static func mult_magie(p: Dictionary) -> float:
+	return float(p["u"].get("puissance", 0)) / 10.0 + 1.0
+
+
 func moral(p: Dictionary) -> int:
 	var m: int = p["u"]["moral"]
-	var remplissage: float = float(nombre(p)) / float(p["u"]["escouade"])
-	if remplissage >= 1.0:
-		m += 2
-	elif remplissage >= 0.75:
-		m += 1
+	if not seigneur(p):   # le seigneur n'est pas une escouade
+		var remplissage: float = float(nombre(p)) / float(p["u"]["escouade"])
+		if remplissage >= 1.0:
+			m += 2
+		elif remplissage >= 0.75:
+			m += 1
+		if dans_aura(p):
+			m += 1
 	m -= p["malus"].size()
+	if seigneur_mort.get(p["camp"], false):
+		m -= 1
 	return clampi(m, 0, 10)
+
+
+## Vrai si la pile est dans l'aura de moral d'un seigneur allié vivant.
+func dans_aura(p: Dictionary) -> bool:
+	for s in piles:
+		if vivante(s) and seigneur(s) and s["camp"] == p["camp"] and s["id"] != p["id"] \
+				and distance_tir(s["pos"], p["pos"]) <= s["u"].get("aura", 0):
+			return true
+	return false
 
 
 func pile_en(c: Vector2i):
@@ -262,7 +294,7 @@ func _fin_round() -> void:
 			if x > 1:
 				malus.append(x - 1)
 		var n0: int = debut_round.get(p["id"], 0)
-		if n0 > 0 and float(n0 - nombre(p)) / n0 > SEUIL_PERTES_MORAL:
+		if n0 > 0 and not seigneur(p) and float(n0 - nombre(p)) / n0 > SEUIL_PERTES_MORAL:
 			malus.append(DUREE_MALUS_MORAL)
 			_log("%s : lourdes pertes, moral −1 pour 3 rounds" % p["u"]["nom"])
 		p["malus"] = malus
@@ -413,6 +445,10 @@ func _frapper(att: Dictionary, cible: Dictionary, mult: float, verbe: String) ->
 	_log("%s %s %s : %d dégâts, %d tués%s" % [u["nom"], verbe, cible["u"]["nom"], degats, tues, note])
 	if not vivante(cible):
 		_log("%s est anéanti" % cible["u"]["nom"])
+		if seigneur(cible):
+			seigneur_mort[cible["camp"]] = true
+			points_victoire[att["camp"]] = points_victoire.get(att["camp"], 0) + 1
+			_log("Le seigneur est tombé : moral −1 pour toute son armée, +1 point de victoire pour l'ennemi")
 
 
 func _log(m: String) -> void:

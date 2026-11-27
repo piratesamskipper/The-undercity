@@ -12,8 +12,8 @@ const NOMS_CAMPS := {"HR": "Hommes-rats", "G": "Garde"}
 
 # Compositions de test (identiques à la simulation équilibrée).
 const ARMEE_HR := [["Esclave du père des rats", 2], ["Frondeur des égouts", 2],
-		["Surineurs", 3], ["Rats mutés", 1]]
-const ARMEE_G := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3], ["Vétérans", 2]]
+		["Surineurs", 3], ["Rats mutés", 1], ["Seigneur des Hommes-rats", 1]]
+const ARMEE_G := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3], ["Vétérans", 2], ["Seigneur de la Garde", 1]]
 
 const BOUTON_DEFENDRE := Rect2(8, 570, 196, 56)
 const BOUTON_ATTENDRE := Rect2(8, 638, 196, 56)
@@ -90,6 +90,8 @@ func _ecran_vers_case(p: Vector2) -> Vector2i:
 
 
 func _abreviation(nom: String) -> String:
+	if nom.begins_with("Seigneur"):
+		return "SEIGN."
 	var mots := nom.split(" ")
 	return (mots[0].substr(0, 3) + (mots[-1].substr(0, 1) if mots.size() > 1 else "")).to_upper()
 
@@ -156,7 +158,9 @@ func _draw() -> void:
 			draw_rect(Rect2(coin - Vector2(3, 3), taille + Vector2(6, 6)), col, false, 3.0)
 		draw_string(police, coin + Vector2(0, 16), _abreviation(p["u"]["nom"]),
 				HORIZONTAL_ALIGNMENT_CENTER, taille.x, 13, Color.WHITE)
-		draw_string(police, coin + Vector2(0, 34), str(Combat.nombre(p)),
+		if Combat.seigneur(p):
+			draw_rect(Rect2(coin + Vector2(2, 2), taille - Vector2(4, 4)), Color(0.95, 0.8, 0.3), false, 2.0)
+		draw_string(police, coin + Vector2(0, 34), str(p["pv_total"]) if Combat.seigneur(p) else str(Combat.nombre(p)),
 				HORIZONTAL_ALIGNMENT_CENTER, taille.x, 16, Color(1, 1, 0.8))
 		var marques := ""
 		if p["defend"]:
@@ -234,12 +238,15 @@ func _dessiner_panneau_droit() -> void:
 	var w := 1280.0 - PANNEAU_DROIT - 6
 	draw_string(police, Vector2(x, 30), "Round %d" % combat.round_num if combat.round_num > 0 else "Déploiement", HORIZONTAL_ALIGNMENT_LEFT, w, 17,
 			Color(0.85, 0.85, 0.8))
+	var pts: Dictionary = combat.points_victoire
+	draw_string(police, Vector2(x, 50), "Points de victoire : HR %d · G %d" % [pts.get("HR", 0), pts.get("G", 0)],
+			HORIZONTAL_ALIGNMENT_LEFT, w, 12, Color(0.95, 0.8, 0.3))
 	# Ordre à venir
 	var ordre := []
 	if combat.actif != null:
 		ordre.append(combat.actif)
 	ordre += combat.file + combat.attente + combat.bonus
-	var y := 56.0
+	var y := 74.0
 	for i in mini(ordre.size(), 8):
 		var p: Dictionary = ordre[i]
 		draw_rect(Rect2(x, y - 12, 8, 13), COULEURS[p["camp"]])
@@ -359,6 +366,14 @@ func _dessiner_stats(p: Dictionary, x: float, w: float) -> void:
 	]
 	if Combat.tireur(p):
 		lignes.append("Portée %d · Munitions %d" % [u["portee"], p["munitions"]])
+	if Combat.seigneur(p):
+		lignes[1] = "%s · Seigneur" % NOMS_CAMPS[p["camp"]]
+		lignes[2] = "PV %d / %d" % [p["pv_total"], u["pv"]]
+		lignes[3] = "Aura de moral %d cases" % u["aura"]
+		lignes.append("Intelligence %d · Mana %d" % [u["intelligence"], p["mana"]])
+		lignes.append("Puissance magique %d (x%.1f)" % [u["puissance"], Combat.mult_magie(p)])
+	elif combat.dans_aura(p):
+		lignes.append("Dans l'aura du seigneur (+1 moral)")
 	for i in lignes.size():
 		draw_string(police, Vector2(x, 64 + i * 25), lignes[i], HORIZONTAL_ALIGNMENT_LEFT, w,
 				17 if i == 0 else 15, Color.WHITE if i == 0 else Color(0.85, 0.85, 0.8))
