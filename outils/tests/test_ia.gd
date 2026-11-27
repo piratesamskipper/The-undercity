@@ -23,7 +23,9 @@ func coup_hasard(c: Combat) -> void:
 func serie(unites: Dictionary, ia_hr: bool, ia_g: bool, n: int) -> String:
 	var hr := [["Esclave du père des rats", 2], ["Frondeur des égouts", 2], ["Surineurs", 3], ["Rats mutés", 1], ["Seigneur des Hommes-rats", 1]]
 	var g := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3], ["Vétérans", 2], ["Seigneur de la Garde", 1]]
-	var v := {"HR": 0, "G": 0, "": 0}
+	var v := {"HR": 0, "G": 0, "nul": 0, "": 0}
+	var annihilations := 0
+	var pts_zones := 0
 	var rounds := 0
 	var ms := 0
 	for i in n:
@@ -41,8 +43,12 @@ func serie(unites: Dictionary, ia_hr: bool, ia_g: bool, n: int) -> String:
 				coup_hasard(c)
 		v[c.vainqueur] += 1
 		rounds += c.round_num
-	return "HR %d %% · G %d %% · nuls %d · %.1f rounds · coup IA le plus long %d ms" % [
-		v["HR"] * 100 / n, v["G"] * 100 / n, v[""], rounds / float(n), ms / 1000]
+		for camp in c.detail_points:
+			annihilations += 1 if c.detail_points[camp].has("annihilation") else 0
+			pts_zones += c.detail_points[camp].get("zones", 0)
+	return "HR %d %% · G %d %% · nuls %d · %.1f rounds · annihilations %d %% · points de zone/bataille %.1f · coup IA max %d ms" % [
+		v["HR"] * 100 / n, v["G"] * 100 / n, v["nul"] + v[""], rounds / float(n), annihilations * 100 / n,
+		pts_zones / float(n), ms / 1000]
 
 
 func _initialize():

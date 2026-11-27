@@ -5,6 +5,9 @@ extends RefCounted
 ## attendue, et choisit la meilleure. Sinon elle avance vers l'ennemi.
 
 
+const VALEUR_ZONE := 250.0   # intérêt d'une zone à contrôler, comparé à la menace d'une pile
+
+
 ## Dégâts moyens que `att` infligerait à `cible` (sans hasard).
 static func degats_moyens(att: Dictionary, cible: Dictionary, mult: float, nb := -1) -> float:
 	var u: Dictionary = att["u"]
@@ -86,6 +89,9 @@ static func jouer(c: Combat) -> void:
 				# ne pas finir dans l'égout toxique sans raison
 				if c.terrain.get(case, "") == "toxique":
 					score -= 0.05 * menace(p)
+				# quitter une zone qu'on tient coûte des points
+				if c.zone_en(p["pos"]) != null and c.zone_en(case) == null:
+					score -= VALEUR_ZONE * 0.3
 				# préférer ne pas bouger pour rien
 				if case != p["pos"]:
 					score -= 0.01
@@ -96,7 +102,13 @@ static func jouer(c: Combat) -> void:
 			c.attaquer(choix[0], choix[1])
 			return
 
-	# Rien à faire d'ici : avancer (par le chemin réel) vers la cible la plus intéressante.
+	# Déjà sur une zone, rien à attaquer : la tenir.
+	if c.zone_en(p["pos"]) != null and not Combat.tireur(p):
+		c.defendre()
+		return
+
+	# Rien à faire d'ici : avancer (par le chemin réel) vers la cible la plus intéressante,
+	# ennemi ou zone libre que personne de son camp n'occupe.
 	var cible = null
 	var dist_cible := {}
 	var meilleur_c := -INF
@@ -107,6 +119,21 @@ static func jouer(c: Combat) -> void:
 			meilleur_c = score
 			cible = e
 			dist_cible = dist
+	if not Combat.tireur(p) and not Combat.seigneur(p):
+		for z in c.zones:
+			var deja := false
+			for case_z in z["cases"]:
+				var occ = c.pile_en(case_z)
+				if occ != null and occ["camp"] == p["camp"]:
+					deja = true
+			if deja:
+				continue
+			var dist := c.distances_depuis(z["cases"][0])
+			var score: float = VALEUR_ZONE / (1.0 + float(dist.get(p["pos"], 99.0)))
+			if score > meilleur_c:
+				meilleur_c = score
+				cible = z
+				dist_cible = dist
 	var meilleure_case = null
 	var dist_min: float = dist_cible.get(p["pos"], INF)
 	for case in reach.keys():

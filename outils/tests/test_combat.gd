@@ -8,7 +8,7 @@ func _initialize():
 	var hr := [["Esclave du père des rats", 2], ["Frondeur des égouts", 2], ["Surineurs", 3], ["Rats mutés", 1], ["Seigneur des Hommes-rats", 1]]
 	var g := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3], ["Vétérans", 2], ["Seigneur de la Garde", 1]]
 	var rng := RandomNumberGenerator.new()
-	var victoires := {"HR": 0, "G": 0, "": 0}
+	var victoires := {"HR": 0, "G": 0, "nul": 0, "": 0}
 	var rounds := 0
 	var erreurs := 0
 	var revers := 0

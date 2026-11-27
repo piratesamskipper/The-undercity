@@ -16,6 +16,11 @@ const ZONE_DEPLOIEMENT := 2   # colonnes de déploiement de chaque camp
 const COUT_EAU := 2.0          # multiplicateur de coût de déplacement dans l'eau
 const DEGATS_TOXIQUE := 0.05   # part des PV perdus en fin de round sur un égout toxique
 const PENALITE_SOMBRE := 0.75  # tir vers ou depuis une zone sombre
+const ROUNDS_MAX := 8
+const PV_ZONE := 1             # points par tranche de 2 rounds de contrôle d'une zone
+const ROUNDS_PAR_POINT_ZONE := 2
+const PV_SEIGNEUR := 2
+const PV_ANNIHILATION := 10
 const BONUS_REVERS := 1.2      # attaque au corps à corps par l'arrière (pas pour le tir)
 
 var piles: Array = []
@@ -34,11 +39,14 @@ var terrain := {}             # case -> "mur" | "obstacle" | "trou" | "eau" | "t
 var types_carte: Array = []   # types de terrain présents sur cette carte
 var seigneur_mort := {}       # camp -> vrai si son seigneur est tombé
 var points_victoire := {}     # camp -> points de victoire
+var detail_points := {}       # camp -> {source: points}
+var zones: Array = []         # [{cases: [Vector2i], compteur: {camp: rounds}, tenue_par: camp ou ""}]
 
 
 func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", camp_b := "G") -> void:
 	rng.randomize()
 	generer_terrain()
+	generer_zones()
 	piles = _deployer(unites, armee_a, camp_a, true) + _deployer(unites, armee_b, camp_b, false)
 	for i in piles.size():
 		piles[i]["id"] = i
@@ -312,7 +320,8 @@ func _fin_round() -> void:
 			if not vivante(p):
 				_log("%s est anéanti" % p["u"]["nom"])
 				if seigneur(p):
-					seigneur_mort[p["camp"]] = true
+					_seigneur_tombe(p)
+	_compter_zones()
 	for p in piles:
 		if not vivante(p):
 			continue
@@ -344,6 +353,9 @@ func _suivant() -> void:
 			_fin_round()
 			if _verifier_fin():
 				return
+			if round_num >= ROUNDS_MAX:
+				_fin_par_points()
+				return
 			_demarrer_round()
 			continue
 		if not vivante(p):
@@ -369,11 +381,45 @@ func _verifier_fin() -> bool:
 		if vivante(p):
 			camps[p["camp"]] = true
 	if camps.size() == 1:
-		vainqueur = camps.keys()[0]
-		actif = null
-		_log("Victoire : %s" % ("Hommes-rats" if vainqueur == "HR" else "Garde"))
+		var gagnant: String = camps.keys()[0]
+		_ajouter_points(gagnant, "annihilation", PV_ANNIHILATION)
+		_log("Annihilation totale : +%d points" % PV_ANNIHILATION)
+		_fin_par_points()
+		return true
+	if camps.is_empty():
+		_fin_par_points()
 		return true
 	return false
+
+
+## Fin de bataille : le camp qui a le plus de points de victoire gagne.
+func _fin_par_points() -> void:
+	actif = null
+	var a: int = points_victoire.get(camps_gauche_droite[0], 0)
+	var b: int = points_victoire.get(camps_gauche_droite[1], 0)
+	if a == b:
+		vainqueur = "nul"
+		_log("Égalité aux points (%d à %d)" % [a, b])
+	else:
+		vainqueur = camps_gauche_droite[0] if a > b else camps_gauche_droite[1]
+		_log("Victoire aux points (%d à %d)" % [maxi(a, b), mini(a, b)])
+
+
+func camp_adverse(camp: String) -> String:
+	return camps_gauche_droite[1] if camp == camps_gauche_droite[0] else camps_gauche_droite[0]
+
+
+func _ajouter_points(camp: String, source: String, n: int) -> void:
+	points_victoire[camp] = points_victoire.get(camp, 0) + n
+	if not detail_points.has(camp):
+		detail_points[camp] = {}
+	detail_points[camp][source] = detail_points[camp].get(source, 0) + n
+
+
+func _seigneur_tombe(s: Dictionary) -> void:
+	seigneur_mort[s["camp"]] = true
+	_ajouter_points(camp_adverse(s["camp"]), "seigneur", PV_SEIGNEUR)
+	_log("Le seigneur est tombé : moral −1 pour toute son armée, +%d points pour l'ennemi" % PV_SEIGNEUR)
 
 
 func _terminer_action() -> void:
@@ -477,9 +523,7 @@ func _frapper(att: Dictionary, cible: Dictionary, mult: float, verbe: String) ->
 	if not vivante(cible):
 		_log("%s est anéanti" % cible["u"]["nom"])
 		if seigneur(cible):
-			seigneur_mort[cible["camp"]] = true
-			points_victoire[att["camp"]] = points_victoire.get(att["camp"], 0) + 1
-			_log("Le seigneur est tombé : moral −1 pour toute son armée, +1 point de victoire pour l'ennemi")
+			_seigneur_tombe(cible)
 
 
 func _log(m: String) -> void:
@@ -604,3 +648,69 @@ func _carte_connexe() -> bool:
 			if not bloquee(Vector2i(x, y)):
 				libres += 1
 	return distances_depuis(Vector2i(0, 0)).size() == libres
+
+
+
+# --- Zones à contrôler -------------------------------------------------------
+
+## 1 à 3 zones, symétriques : une zone centrale de 2 cases et/ou une paire en miroir.
+func generer_zones() -> void:
+	zones.clear()
+	var n := rng.randi_range(1, 3)
+	var milieu := COLONNES / 2
+	if n != 2:
+		var y := rng.randi_range(1, LIGNES - 2)
+		_ajouter_zone([Vector2i(milieu - 1, y), Vector2i(milieu, y)])
+	if n >= 2:
+		for essai in 20:
+			var c := Vector2i(rng.randi_range(ZONE_DEPLOIEMENT + 2, milieu - 2), rng.randi_range(0, LIGNES - 1))
+			if zone_en(c) == null:
+				_ajouter_zone([c])
+				_ajouter_zone([Vector2i(COLONNES - 1 - c.x, c.y)])
+				break
+
+
+func _ajouter_zone(cases: Array) -> void:
+	for c in cases:
+		terrain.erase(c)   # une zone est toujours praticable (symétrie conservée)
+	zones.append({"cases": cases, "compteur": {}, "tenue_par": ""})
+
+
+func zone_en(c: Vector2i):
+	for z in zones:
+		if z["cases"].has(c):
+			return z
+	return null
+
+
+## Camp qui tient la zone : une de ses piles dessus, aucune pile ennemie dessus ni adjacente.
+func camp_tenant(z: Dictionary) -> String:
+	var occupants := []
+	for c in z["cases"]:
+		var p = pile_en(c)
+		if p != null:
+			occupants.append(p)
+	if occupants.is_empty():
+		return ""
+	var camp: String = occupants[0]["camp"]
+	for p in occupants:
+		if p["camp"] != camp:
+			return ""
+		for e in ennemis_de(p):
+			if adjacent(p["pos"], e["pos"]):
+				return ""
+	return camp
+
+
+func _compter_zones() -> void:
+	for z in zones:
+		var camp := camp_tenant(z)
+		z["tenue_par"] = camp
+		if camp == "":
+			continue
+		z["compteur"][camp] = z["compteur"].get(camp, 0) + 1
+		if z["compteur"][camp] >= ROUNDS_PAR_POINT_ZONE:
+			z["compteur"][camp] = 0
+			_ajouter_points(camp, "zones", PV_ZONE)
+			_log("%s tient une zone depuis 2 rounds : +%d point" % [
+				"Les Hommes-rats" if camp == "HR" else "La Garde", PV_ZONE])

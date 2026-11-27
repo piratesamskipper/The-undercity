@@ -30,6 +30,7 @@ const TERRAINS := {
 	"mur": [Color(0.42, 0.4, 0.37), 1.0, "Mur : infranchissable, bloque la ligne de vue."],
 	"obstacle": [Color(0.36, 0.27, 0.17), 0.85, "Obstacle : infranchissable, ne bloque pas les tirs."],
 	"trou": [Color(0.0, 0.0, 0.0), 0.9, "Trou : infranchissable, ne bloque pas les tirs."],
+	"zone": [Color(0, 0, 0), 0.0, "Zone à contrôler : une pile dessus et aucune pile ennemie adjacente. 1 point tous les 2 rounds tenus."],
 	"eau": [Color(0.15, 0.32, 0.5), 0.6, "Eau : une case coûte 2 de vitesse (3 en diagonale)."],
 	"toxique": [Color(0.3, 0.5, 0.12), 0.6, "Égout toxique : -5 % des PV en fin de round pour la pile qui s'y trouve."],
 	"sombre": [Color(0.06, 0.03, 0.12), 0.7, "Zone sombre : tir vers ou depuis cette case x0,75."],
@@ -141,6 +142,16 @@ func _draw() -> void:
 				fond = Color(0.75, 0.6, 0.15) if Combat.a_revers(cible, case) else Color(0.25, 0.55, 0.3)
 			draw_rect(Rect2(_case_vers_ecran(case), Vector2.ONE * TAILLE_CASE), fond)
 			_dessiner_terrain(case, type)
+			var z = combat.zone_en(case)
+			if z != null:
+				var r := Rect2(_case_vers_ecran(case), Vector2.ONE * TAILLE_CASE).grow(-3)
+				var tenue: String = z["tenue_par"]
+				var col: Color = COULEURS[tenue].lightened(0.3) if tenue != "" else Color(0.95, 0.8, 0.3)
+				draw_rect(r, col, false, 3.0)
+				# petit drapeau dans le coin
+				var b := r.position + Vector2(6, 6)
+				draw_line(b, b + Vector2(0, 16), col, 2.0)
+				draw_colored_polygon(PackedVector2Array([b, b + Vector2(11, 4), b + Vector2(0, 8)]), col)
 			if cases_cible.has(case) and Combat.a_revers(cible, case):
 				draw_string(police, _case_vers_ecran(case) + Vector2(0, 36), "dos", HORIZONTAL_ALIGNMENT_CENTER,
 						TAILLE_CASE, 14, Color(0.1, 0.08, 0.02))
@@ -250,7 +261,7 @@ func _dessiner_panneau_gauche() -> void:
 func _dessiner_panneau_droit() -> void:
 	var x := PANNEAU_DROIT
 	var w := 1280.0 - PANNEAU_DROIT - 6
-	draw_string(police, Vector2(x, 30), "Round %d" % combat.round_num if combat.round_num > 0 else "Déploiement", HORIZONTAL_ALIGNMENT_LEFT, w, 17,
+	draw_string(police, Vector2(x, 30), "Round %d / %d" % [combat.round_num, Combat.ROUNDS_MAX] if combat.round_num > 0 else "Déploiement", HORIZONTAL_ALIGNMENT_LEFT, w, 17,
 			Color(0.85, 0.85, 0.8))
 	var pts: Dictionary = combat.points_victoire
 	draw_string(police, Vector2(x, 50), "Points de victoire : HR %d · G %d" % [pts.get("HR", 0), pts.get("G", 0)],
@@ -282,9 +293,21 @@ func _dessiner_panneau_droit() -> void:
 
 
 func _dessiner_fin() -> void:
-	draw_rect(Rect2(ORIGINE + Vector2(120, 170), Vector2(600, 260)), Color(0, 0, 0, 0.8))
-	draw_string(police, ORIGINE + Vector2(120, 270), "Victoire : " + NOMS_CAMPS[combat.vainqueur],
-			HORIZONTAL_ALIGNMENT_CENTER, 600, 32, COULEURS[combat.vainqueur].lightened(0.4))
+	var cadre := Rect2(ORIGINE + Vector2(120, 110), Vector2(600, 340))
+	draw_rect(cadre, Color(0, 0, 0, 0.85))
+	var v: String = combat.vainqueur
+	var titre: String = "Égalité" if v == "nul" else "Victoire : " + NOMS_CAMPS[v]
+	var couleur: Color = Color(0.85, 0.85, 0.8) if v == "nul" else COULEURS[v].lightened(0.4)
+	draw_string(police, cadre.position + Vector2(0, 52), titre, HORIZONTAL_ALIGNMENT_CENTER, cadre.size.x, 32, couleur)
+	var y := cadre.position.y + 100
+	for camp in ["HR", "G"]:
+		var d: Dictionary = combat.detail_points.get(camp, {})
+		var texte := "%s : %d points  (zones %d · seigneur %d · annihilation %d)" % [
+			NOMS_CAMPS[camp], combat.points_victoire.get(camp, 0),
+			d.get("zones", 0), d.get("seigneur", 0), d.get("annihilation", 0)]
+		draw_string(police, Vector2(cadre.position.x, y), texte, HORIZONTAL_ALIGNMENT_CENTER, cadre.size.x, 17,
+				COULEURS[camp].lightened(0.45))
+		y += 30
 	_bouton(BOUTON_REJOUER, "Rejouer", true)
 
 
@@ -352,6 +375,8 @@ func _toucher_case(c: Vector2i) -> void:
 			selection = null
 		else:
 			var type: String = combat.terrain.get(c, "")
+			if combat.zone_en(c) != null:
+				type = "zone"
 			message = TERRAINS[type][2] if TERRAINS.has(type) else "Case hors d'atteinte."
 	elif p["camp"] != actif["camp"]:
 		if combat.peut_tirer(actif):
