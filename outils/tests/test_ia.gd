@@ -10,7 +10,7 @@ func coup_hasard(c: Combat) -> void:
 	var reach := c.accessibles(a)
 	var cibles := []
 	for e in c.ennemis_de(a):
-		if c.peut_tirer(a) or c.case_attaque(a, e, reach) != null:
+		if (c.peut_tirer(a) and c.ligne_de_vue(a["pos"], e["pos"])) or (not c.peut_tirer(a) and c.case_attaque(a, e, reach) != null):
 			cibles.append(e)
 	if not cibles.is_empty() and rng.randf() < 0.7:
 		c.attaquer(cibles[rng.randi() % cibles.size()])
@@ -49,7 +49,7 @@ func _initialize():
 	var unites := {}
 	for u in JSON.parse_string(FileAccess.get_file_as_string("res://donnees/unites.json")):
 		unites[u["nom"]] = u
-	print("IA contre IA      : ", serie(unites, true, true, 200))
-	print("IA HR vs hasard G : ", serie(unites, true, false, 100))
-	print("hasard HR vs IA G : ", serie(unites, false, true, 100))
+	print("IA contre IA      : ", serie(unites, true, true, 60))
+	print("IA HR vs hasard G : ", serie(unites, true, false, 30))
+	print("hasard HR vs IA G : ", serie(unites, false, true, 30))
 	quit()

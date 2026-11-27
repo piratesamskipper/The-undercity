@@ -24,6 +24,14 @@ const BOUTONS_MENU := {
 	"": Rect2(482, 450, 300, 60),       # deux joueurs sur le même téléphone
 }
 const DELAI_IA := 0.6
+# type de terrain -> [couleur, intensité du mélange avec la case, description]
+const TERRAINS := {
+	"mur": [Color(0.42, 0.4, 0.37), 1.0, "Mur : infranchissable, bloque la ligne de vue."],
+	"obstacle": [Color(0.36, 0.27, 0.17), 0.85, "Obstacle : infranchissable, ne bloque pas les tirs."],
+	"eau": [Color(0.15, 0.32, 0.5), 0.6, "Eau : une case coûte 2 de vitesse (3 en diagonale)."],
+	"toxique": [Color(0.3, 0.5, 0.12), 0.6, "Égout toxique : -5 % des PV en fin de round pour la pile qui s'y trouve."],
+	"sombre": [Color(0.06, 0.03, 0.12), 0.7, "Zone sombre : tir vers ou depuis cette case x0,75."],
+}
 const BOUTON_LANCER := Rect2(8, 600, 196, 70)
 
 var unites := {}
@@ -104,13 +112,13 @@ func _draw() -> void:
 	var cibles := {}     # id de pile -> "cac" | "tir" | "loin"
 	if actif != null:
 		reach = combat.accessibles(actif)
-		var tir := combat.peut_tirer(actif)
-		for e in combat.ennemis_de(actif):
-			if tir:
-				var loin: bool = Combat.distance_tir(actif["pos"], e["pos"]) > actif["u"]["portee"]
-				cibles[e["id"]] = "loin" if loin else "tir"
-			elif combat.case_attaque(actif, e, reach) != null:
-				cibles[e["id"]] = "cac"
+		if combat.peut_tirer(actif):
+			for e in combat.cibles_tir(actif):
+				cibles[e["id"]] = "loin" if combat.mult_tir(actif, e) < 1.0 else "tir"
+		else:
+			for e in combat.ennemis_de(actif):
+				if combat.case_attaque(actif, e, reach) != null:
+					cibles[e["id"]] = "cac"
 	var cases_cible := []
 	if cible != null and actif != null:
 		cases_cible = combat.cases_attaque(actif, cible, reach)
@@ -120,6 +128,9 @@ func _draw() -> void:
 		for c in Combat.COLONNES:
 			var case := Vector2i(c, l)
 			var fond := Color(0.16, 0.16, 0.15) if (l + c) % 2 == 0 else Color(0.19, 0.19, 0.18)
+			var type: String = combat.terrain.get(case, "")
+			if TERRAINS.has(type):
+				fond = fond.lerp(TERRAINS[type][0], TERRAINS[type][1])
 			if reach.has(case):
 				fond = fond.lerp(COULEURS[actif["camp"]], 0.35)
 			if not a_deployer.is_empty() and combat.dans_zone(a_deployer[0], case):
@@ -127,6 +138,7 @@ func _draw() -> void:
 			if cases_cible.has(case):
 				fond = Color(0.75, 0.6, 0.15) if Combat.a_revers(cible, case) else Color(0.25, 0.55, 0.3)
 			draw_rect(Rect2(_case_vers_ecran(case), Vector2.ONE * TAILLE_CASE), fond)
+			_dessiner_terrain(case, type)
 			if cases_cible.has(case) and Combat.a_revers(cible, case):
 				draw_string(police, _case_vers_ecran(case) + Vector2(0, 36), "dos", HORIZONTAL_ALIGNMENT_CENTER,
 						TAILLE_CASE, 14, Color(0.1, 0.08, 0.02))
@@ -226,7 +238,7 @@ func _dessiner_panneau_gauche() -> void:
 	if actif != null and not _tour_ia():
 		var aide := "Touche une case pour bouger.\nTouche un ennemi encadré pour le viser, puis la case d'où frapper (dorée = de dos), ou l'ennemi à nouveau pour frapper au plus court."
 		if combat.peut_tirer(actif):
-			aide = "Touche une case pour bouger.\nTouche un ennemi pour tirer (orange = hors de portée, x0,5)."
+			aide = "Touche une case pour bouger.\nTouche un ennemi encadré pour tirer (orange = tir affaibli : hors de portée ou zone sombre). Les murs bloquent la vue."
 		draw_multiline_string(police, Vector2(x, 430), aide, HORIZONTAL_ALIGNMENT_LEFT, w, 13, -1,
 				Color(0.6, 0.6, 0.55))
 		_bouton(BOUTON_DEFENDRE, "Défendre", true)
@@ -337,11 +349,15 @@ func _toucher_case(c: Vector2i) -> void:
 		if combat.deplacer(c):
 			selection = null
 		else:
-			message = "Case hors d'atteinte."
+			var type: String = combat.terrain.get(c, "")
+			message = TERRAINS[type][2] if TERRAINS.has(type) else "Case hors d'atteinte."
 	elif p["camp"] != actif["camp"]:
 		if combat.peut_tirer(actif):
-			selection = null
-			combat.attaquer(p)
+			if combat.attaquer(p):
+				selection = null
+			else:
+				selection = p
+				message = "Pas de ligne de vue : un mur bloque le tir."
 		elif combat.case_attaque(actif, p, combat.accessibles(actif)) != null:
 			cible = p
 			selection = p
@@ -373,7 +389,7 @@ func _dessiner_stats(p: Dictionary, x: float, w: float) -> void:
 		lignes.append("Intelligence %d · Mana %d" % [u["intelligence"], p["mana"]])
 		lignes.append("Puissance magique %d (x%.1f)" % [u["puissance"], Combat.mult_magie(p)])
 	elif combat.dans_aura(p):
-		lignes.append("Dans l'aura du seigneur (+1 moral)")
+		lignes.append("Aura du seigneur : +1 moral")
 	for i in lignes.size():
 		draw_string(police, Vector2(x, 64 + i * 25), lignes[i], HORIZONTAL_ALIGNMENT_LEFT, w,
 				17 if i == 0 else 15, Color.WHITE if i == 0 else Color(0.85, 0.85, 0.8))
@@ -406,3 +422,25 @@ func _init_visible(p: Dictionary) -> String:
 	if not a_deployer.is_empty() and p["camp"] != a_deployer[0] and not voir_init_adverse:
 		return "?"
 	return str(p["init"])
+
+
+func _dessiner_terrain(case: Vector2i, type: String) -> void:
+	var r := Rect2(_case_vers_ecran(case), Vector2.ONE * TAILLE_CASE)
+	match type:
+		"mur":
+			# briques
+			for k in 3:
+				var y := r.position.y + 6 + k * 18
+				draw_line(Vector2(r.position.x + 4, y), Vector2(r.end.x - 4, y), Color(0.3, 0.29, 0.27), 2.0)
+			draw_rect(r.grow(-2), Color(0.25, 0.24, 0.22), false, 2.0)
+		"obstacle":
+			draw_line(r.position + Vector2(14, 14), r.end - Vector2(14, 14), Color(0.55, 0.42, 0.25), 4.0)
+			draw_line(Vector2(r.end.x - 14, r.position.y + 14), Vector2(r.position.x + 14, r.end.y - 14),
+					Color(0.55, 0.42, 0.25), 4.0)
+		"eau":
+			for k in 2:
+				var y := r.position.y + 22 + k * 16
+				draw_line(Vector2(r.position.x + 10, y), Vector2(r.end.x - 10, y), Color(0.45, 0.65, 0.85, 0.7), 2.0)
+		"toxique":
+			draw_circle(r.position + Vector2(18, 20), 4, Color(0.6, 0.85, 0.2, 0.8))
+			draw_circle(r.position + Vector2(40, 38), 5, Color(0.6, 0.85, 0.2, 0.8))

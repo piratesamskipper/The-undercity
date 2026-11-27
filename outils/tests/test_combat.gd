@@ -25,6 +25,7 @@ func _initialize():
 			# invariants
 			var cases := {}
 			for p in c.piles:
+				if Combat.vivante(p) and c.bloquee(p["pos"]): erreurs += 1; print("pile sur un mur")
 				if Combat.vivante(p):
 					if cases.has(p["pos"]): erreurs += 1; print("deux piles sur une case")
 					cases[p["pos"]] = true
@@ -32,7 +33,7 @@ func _initialize():
 			var reach := c.accessibles(a)
 			var cibles := []
 			for e in c.ennemis_de(a):
-				if c.peut_tirer(a) or c.case_attaque(a, e, reach) != null:
+				if (c.peut_tirer(a) and c.ligne_de_vue(a["pos"], e["pos"])) or (not c.peut_tirer(a) and c.case_attaque(a, e, reach) != null):
 					cibles.append(e)
 			var r := rng.randf()
 			if not cibles.is_empty() and r < 0.75:

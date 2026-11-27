@@ -13,6 +13,9 @@ const BONUS_DEFENDRE := 1.3
 const SEUIL_PERTES_MORAL := 0.2
 const DUREE_MALUS_MORAL := 3
 const ZONE_DEPLOIEMENT := 2   # colonnes de déploiement de chaque camp
+const COUT_EAU := 2.0          # multiplicateur de coût de déplacement dans l'eau
+const DEGATS_TOXIQUE := 0.05   # part des PV perdus en fin de round sur un égout toxique
+const PENALITE_SOMBRE := 0.75  # tir vers ou depuis une zone sombre
 const BONUS_REVERS := 1.2      # attaque au corps à corps par l'arrière (pas pour le tir)
 
 var piles: Array = []
@@ -27,12 +30,14 @@ var journal: Array = []       # messages pour le joueur
 var vainqueur := ""
 var rng := RandomNumberGenerator.new()
 var camps_gauche_droite: Array = []
+var terrain := {}             # case -> "mur" | "obstacle" | "eau" | "toxique" | "sombre"
 var seigneur_mort := {}       # camp -> vrai si son seigneur est tombé
 var points_victoire := {}     # camp -> points de victoire
 
 
 func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", camp_b := "G") -> void:
 	rng.randomize()
+	generer_terrain()
 	piles = _deployer(unites, armee_a, camp_a, true) + _deployer(unites, armee_b, camp_b, false)
 	for i in piles.size():
 		piles[i]["id"] = i
@@ -66,7 +71,7 @@ func replacer(p: Dictionary, c: Vector2i) -> bool:
 	if round_num > 0 or not dans_zone(p["camp"], c):
 		return false
 	var autre = pile_en(c)
-	if autre != null and autre["camp"] != p["camp"]:
+	if bloquee(c) or (autre != null and autre["camp"] != p["camp"]):
 		return false
 	if autre != null:
 		autre["pos"] = p["pos"]
@@ -212,9 +217,9 @@ func accessibles(p: Dictionary) -> Dictionary:
 				meilleur = i
 		var c: Vector2i = a_traiter.pop_at(meilleur)
 		for v in voisins(c):
-			if pile_en(v) != null:
+			if pile_en(v) != null or bloquee(v):
 				continue
-			var nd: float = couts[c] + (COUT_DIAGONALE if v.x != c.x and v.y != c.y else 1.0)
+			var nd: float = couts[c] + cout_pas(c, v)
 			if nd <= vitesse and nd < couts.get(v, INF):
 				couts[v] = nd
 				a_traiter.append(v)
@@ -287,6 +292,16 @@ func _demarrer_round() -> void:
 
 func _fin_round() -> void:
 	for p in piles:
+		if vivante(p) and terrain.get(p["pos"], "") == "toxique":
+			var perte := maxi(1, int(p["pv_total"] * DEGATS_TOXIQUE))
+			var avant := nombre(p)
+			p["pv_total"] = maxi(0, p["pv_total"] - perte)
+			_log("%s suffoque dans l'égout toxique : %d dégâts, %d morts" % [p["u"]["nom"], perte, avant - nombre(p)])
+			if not vivante(p):
+				_log("%s est anéanti" % p["u"]["nom"])
+				if seigneur(p):
+					seigneur_mort[p["camp"]] = true
+	for p in piles:
 		if not vivante(p):
 			continue
 		var malus: Array = []
@@ -315,6 +330,8 @@ func _suivant() -> void:
 			tour_bonus = true
 		else:
 			_fin_round()
+			if _verifier_fin():
+				return
 			_demarrer_round()
 			continue
 		if not vivante(p):
@@ -368,10 +385,12 @@ func attaquer(cible: Dictionary, depuis = null) -> bool:
 	if actif == null or not vivante(cible) or cible["camp"] == actif["camp"]:
 		return false
 	if peut_tirer(actif):
-		var d := distance_tir(actif["pos"], cible["pos"])
-		var mult := PENALITE_HORS_PORTEE if d > actif["u"]["portee"] else 1.0
+		if not ligne_de_vue(actif["pos"], cible["pos"]):
+			return false
+		var mult := mult_tir(actif, cible)
 		actif["munitions"] -= 1
-		_frapper(actif, cible, mult, "tire sur" if mult == 1.0 else "tire de loin sur")
+		var loin: bool = distance_tir(actif["pos"], cible["pos"]) > actif["u"]["portee"]
+		_frapper(actif, cible, mult, "tire de loin sur" if loin else "tire sur")
 		_terminer_action()
 		return true
 	var reach := accessibles(actif)
@@ -455,3 +474,115 @@ func _log(m: String) -> void:
 	journal.append(m)
 	if journal.size() > 60:
 		journal.pop_front()
+
+
+
+# --- Terrain -----------------------------------------------------------------
+
+static func bloque_type(t: String) -> bool:
+	return t == "mur" or t == "obstacle"
+
+
+func bloquee(c: Vector2i) -> bool:
+	return bloque_type(terrain.get(c, ""))
+
+
+## Coût pour passer de la case `de` à la case voisine `vers`.
+func cout_pas(de: Vector2i, vers: Vector2i) -> float:
+	var base := COUT_DIAGONALE if vers.x != de.x and vers.y != de.y else 1.0
+	return base * (COUT_EAU if terrain.get(vers, "") == "eau" else 1.0)
+
+
+## Vrai si aucun mur ne coupe le segment entre les centres des deux cases.
+func ligne_de_vue(a: Vector2i, b: Vector2i) -> bool:
+	var pa := Vector2(a) + Vector2(0.5, 0.5)
+	var pb := Vector2(b) + Vector2(0.5, 0.5)
+	var etapes := int(pa.distance_to(pb) * 8) + 1
+	for i in range(1, etapes):
+		var q := pa.lerp(pb, float(i) / etapes)
+		var c := Vector2i(floori(q.x), floori(q.y))
+		if c != a and c != b and terrain.get(c, "") == "mur":
+			return false
+	return true
+
+
+## Multiplicateur d'un tir : hors de portée et zones sombres.
+func mult_tir(att: Dictionary, cible: Dictionary) -> float:
+	var m := 1.0
+	if distance_tir(att["pos"], cible["pos"]) > att["u"]["portee"]:
+		m *= PENALITE_HORS_PORTEE
+	if terrain.get(att["pos"], "") == "sombre" or terrain.get(cible["pos"], "") == "sombre":
+		m *= PENALITE_SOMBRE
+	return m
+
+
+## Ennemis que la pile peut prendre pour cible d'un tir maintenant.
+func cibles_tir(p: Dictionary) -> Array:
+	if not peut_tirer(p):
+		return []
+	return ennemis_de(p).filter(func(e): return ligne_de_vue(p["pos"], e["pos"]))
+
+
+## Distance de marche depuis une case vers toutes les autres (terrain seul, piles ignorées).
+func distances_depuis(depart: Vector2i) -> Dictionary:
+	var d := {depart: 0.0}
+	var a_traiter := [depart]
+	while not a_traiter.is_empty():
+		var meilleur := 0
+		for i in a_traiter.size():
+			if d[a_traiter[i]] < d[a_traiter[meilleur]]:
+				meilleur = i
+		var c: Vector2i = a_traiter.pop_at(meilleur)
+		for v in voisins(c):
+			if bloquee(v):
+				continue
+			var nd: float = d[c] + cout_pas(c, v)
+			if nd < d.get(v, INF):
+				d[v] = nd
+				a_traiter.append(v)
+	return d
+
+
+## Carte au hasard, symétrique gauche-droite ; zones de déploiement dégagées.
+func generer_terrain() -> void:
+	for essai in 50:
+		terrain.clear()
+		var moitie := COLONNES / 2
+		var col_min := ZONE_DEPLOIEMENT + 1
+		# murs : 2 segments de 2 à 3 cases
+		for i in 2:
+			var c := Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(1, LIGNES - 2))
+			var dir := Vector2i(0, 1) if rng.randf() < 0.6 else Vector2i(1, 0)
+			for k in rng.randi_range(2, 3):
+				_poser(c + dir * k, "mur")
+		# obstacles isolés
+		for i in rng.randi_range(2, 3):
+			_poser(Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(0, LIGNES - 1)), "obstacle")
+		# taches d'eau, d'égout toxique et de zone sombre
+		for type in ["eau", "toxique", "sombre"]:
+			var centre := Vector2i(rng.randi_range(col_min, moitie - 1), rng.randi_range(0, LIGNES - 1))
+			var taille := rng.randi_range(2, 4) if type != "sombre" else 4
+			for k in taille:
+				var c: Vector2i = centre + Vector2i(rng.randi_range(-1, 1), rng.randi_range(-1, 1))
+				if not terrain.has(c):
+					_poser(c, type)
+		# symétrie
+		for c in terrain.keys():
+			terrain[Vector2i(COLONNES - 1 - c.x, c.y)] = terrain[c]
+		if _carte_connexe():
+			return
+	terrain.clear()
+
+
+func _poser(c: Vector2i, type: String) -> void:
+	if dans_grille(c) and c.x > ZONE_DEPLOIEMENT and c.x < COLONNES / 2:
+		terrain[c] = type
+
+
+func _carte_connexe() -> bool:
+	var libres := 0
+	for x in COLONNES:
+		for y in LIGNES:
+			if not bloquee(Vector2i(x, y)):
+				libres += 1
+	return distances_depuis(Vector2i(0, 0)).size() == libres
