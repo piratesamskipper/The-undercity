@@ -3,10 +3,10 @@
   {"nom": "Frondeur des égouts", "faction": "HR", "tier": 1, "pv": 4, "att": 3, "def": 1, "deg": [2, 4], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 6, "munitions": 3, "escouade": 70, "cout": 25},
   {"nom": "Surineurs", "faction": "HR", "tier": 2, "pv": 6, "att": 5, "def": 2, "deg": [5, 7], "vitesse": 7, "initiative": 12, "moral": 6, "chance": 5, "portee": 0, "munitions": 0, "escouade": 60, "cout": 40, "capacites": ["bond"]},
   {"nom": "Rats mutés", "faction": "HR", "tier": 3, "pv": 20, "att": 8, "def": 6, "deg": [10, 15], "vitesse": 6, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 30, "cout": 100},
-  {"nom": "Bleusaille", "faction": "G", "tier": 1, "pv": 7, "att": 3, "def": 3, "deg": [2, 6], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 30, "cout": 30},
-  {"nom": "Arbalétriers", "faction": "G", "tier": 2, "pv": 8, "att": 5, "def": 3, "deg": [7, 10], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 7, "munitions": 5, "escouade": 20, "cout": 50},
-  {"nom": "Soldats du cru", "faction": "G", "tier": 2, "pv": 12, "att": 4, "def": 5, "deg": [5, 9], "vitesse": 5, "initiative": 9, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 20, "cout": 35},
-  {"nom": "Vétérans", "faction": "G", "tier": 3, "pv": 30, "att": 6, "def": 8, "deg": [8, 12], "vitesse": 6, "initiative": 10, "moral": 6, "chance": 5, "portee": 0, "munitions": 0, "escouade": 15, "cout": 100},
+  {"nom": "Bleusaille", "faction": "G", "tier": 1, "pv": 7, "att": 3, "def": 3, "deg": [2, 6], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 30, "cout": 50},
+  {"nom": "Arbalétriers", "faction": "G", "tier": 2, "pv": 8, "att": 5, "def": 3, "deg": [7, 10], "vitesse": 5, "initiative": 8, "moral": 5, "chance": 5, "portee": 7, "munitions": 5, "escouade": 20, "cout": 85},
+  {"nom": "Soldats du cru", "faction": "G", "tier": 2, "pv": 12, "att": 4, "def": 5, "deg": [5, 9], "vitesse": 5, "initiative": 9, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 20, "cout": 60},
+  {"nom": "Vétérans", "faction": "G", "tier": 3, "pv": 30, "att": 6, "def": 8, "deg": [8, 12], "vitesse": 6, "initiative": 10, "moral": 6, "chance": 5, "portee": 0, "munitions": 0, "escouade": 15, "cout": 170},
   {"nom": "Seigneur des Hommes-rats", "faction": "HR", "tier": 0, "pv": 250, "att": 8, "def": 8, "deg": [30, 40], "vitesse": 6, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 1, "cout": 500, "seigneur": true, "aura": 5, "intelligence": 3, "puissance": 2},
   {"nom": "Seigneur de la Garde", "faction": "G", "tier": 0, "pv": 250, "att": 8, "def": 8, "deg": [30, 40], "vitesse": 6, "initiative": 8, "moral": 5, "chance": 5, "portee": 0, "munitions": 0, "escouade": 1, "cout": 500, "seigneur": true, "aura": 5, "intelligence": 3, "puissance": 2}
 ]
