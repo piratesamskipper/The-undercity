@@ -1,6 +1,6 @@
 extends Node2D
 ## Écran de bataille : affiche un Combat et transmet les touchers du joueur.
-## Au départ, un menu permet de choisir son camp (l'autre est joué par l'IA) ou de jouer à deux.
+## Le camp joué par l'IA, la carte et les armées viennent de Donnees (menu et éditeurs).
 
 const TAILLE_CASE := 60.0
 const ORIGINE := Vector2(212, 60)
@@ -9,21 +9,13 @@ const LARGEUR_PANNEAU := 200.0
 
 const COULEURS := {"HR": Color(0.55, 0.32, 0.2), "G": Color(0.22, 0.38, 0.62)}
 const NOMS_CAMPS := {"HR": "Hommes-rats", "G": "Garde"}
-const NOMS_CAPACITES := {"bond": "Bond (saute 1 case de trou)"}
+const NOMS_CAPACITES := {"bond": "Bond"}
 
-# Compositions de test (identiques à la simulation équilibrée).
-const ARMEE_HR := [["Esclave du père des rats", 2], ["Frondeur des égouts", 2],
-		["Surineurs", 3], ["Rats mutés", 1], ["Seigneur des Hommes-rats", 1]]
-const ARMEE_G := [["Bleusaille", 1], ["Arbalétriers", 2], ["Soldats du cru", 3], ["Vétérans", 2], ["Seigneur de la Garde", 1]]
 
 const BOUTON_DEFENDRE := Rect2(8, 570, 196, 56)
 const BOUTON_ATTENDRE := Rect2(8, 638, 196, 56)
-const BOUTON_REJOUER := Rect2(532, 400, 200, 60)
-const BOUTONS_MENU := {
-	"G": Rect2(482, 300, 300, 60),      # le joueur prend les Hommes-rats, l'IA la Garde
-	"HR": Rect2(482, 375, 300, 60),     # le joueur prend la Garde, l'IA les Hommes-rats
-	"": Rect2(482, 450, 300, 60),       # deux joueurs sur le même téléphone
-}
+const BOUTON_REJOUER := Rect2(422, 400, 200, 60)
+const BOUTON_MENU := Rect2(642, 400, 200, 60)
 const DELAI_IA := 0.6
 # type de terrain -> [couleur, intensité du mélange avec la case, description]
 const TERRAINS := {
@@ -43,7 +35,6 @@ var selection = null      # pile dont on affiche les stats (sinon l'actif)
 var cible = null          # ennemi visé au corps à corps : on choisit ensuite la case d'attaque
 var message := ""         # retour au joueur (action impossible, etc.)
 var police: Font
-var menu := true
 var camp_ia := ""         # camp joué par l'IA ("" = deux joueurs)
 var attente_ia := 0.0
 var a_deployer: Array = []  # camps humains qui doivent encore valider leur déploiement
@@ -54,14 +45,13 @@ var voir_init_adverse := false
 
 func _ready() -> void:
 	police = ThemeDB.fallback_font
-	var texte := FileAccess.get_file_as_string("res://donnees/unites.json")
-	for u in JSON.parse_string(texte):
-		unites[u["nom"]] = u
+	unites = Donnees.unites_par_nom()
+	camp_ia = Donnees.camp_ia
 	nouvelle_bataille()
 
 
 func _process(delta: float) -> void:
-	if menu or not a_deployer.is_empty() or combat.vainqueur != "" or not _tour_ia():
+	if not a_deployer.is_empty() or combat.vainqueur != "" or not _tour_ia():
 		attente_ia = 0.0
 		return
 	attente_ia += delta
@@ -76,7 +66,8 @@ func _tour_ia() -> bool:
 
 
 func nouvelle_bataille() -> void:
-	combat = Combat.new(unites, ARMEE_HR, ARMEE_G)
+	var carte: Dictionary = Donnees.cartes.get(Donnees.carte_choisie, {})
+	combat = Combat.new(unites, Donnees.armees["HR"], Donnees.armees["G"], "HR", "G", carte)
 	a_deployer = []
 	for camp in ["HR", "G"]:
 		if camp != camp_ia:
@@ -198,21 +189,8 @@ func _draw() -> void:
 
 	_dessiner_panneau_gauche()
 	_dessiner_panneau_droit()
-	if menu:
-		_dessiner_menu()
-	elif combat.vainqueur != "":
+	if combat.vainqueur != "":
 		_dessiner_fin()
-
-
-func _dessiner_menu() -> void:
-	draw_rect(Rect2(Vector2.ZERO, Vector2(1280, 720)), Color(0, 0, 0, 0.75))
-	draw_string(police, Vector2(0, 220), "The Undercity", HORIZONTAL_ALIGNMENT_CENTER, 1280, 40,
-			Color(0.9, 0.85, 0.7))
-	draw_string(police, Vector2(0, 262), "Prototype du combat en grille", HORIZONTAL_ALIGNMENT_CENTER, 1280, 18,
-			Color(0.65, 0.65, 0.6))
-	_bouton(BOUTONS_MENU["G"], "Jouer les Hommes-rats", true)
-	_bouton(BOUTONS_MENU["HR"], "Jouer la Garde", true)
-	_bouton(BOUTONS_MENU[""], "Deux joueurs", true)
 
 
 func _bouton(r: Rect2, texte: String, actif: bool) -> void:
@@ -309,6 +287,7 @@ func _dessiner_fin() -> void:
 				COULEURS[camp].lightened(0.45))
 		y += 30
 	_bouton(BOUTON_REJOUER, "Rejouer", true)
+	_bouton(BOUTON_MENU, "Menu", true)
 
 
 # --- Entrées -----------------------------------------------------------------
@@ -318,17 +297,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var pos: Vector2 = event.position
 	message = ""
-	if menu:
-		for camp in BOUTONS_MENU:
-			if BOUTONS_MENU[camp].has_point(pos):
-				camp_ia = camp
-				menu = false
-				nouvelle_bataille()
-		return
 	if combat.vainqueur != "":
 		if BOUTON_REJOUER.has_point(pos):
-			menu = true
-			queue_redraw()
+			nouvelle_bataille()
+		elif BOUTON_MENU.has_point(pos):
+			get_tree().change_scene_to_file("res://scenes/menu.tscn")
 		return
 	if not a_deployer.is_empty():
 		_toucher_deploiement(pos)

@@ -5,8 +5,12 @@ config_version=5
 [application]
 
 config/name="The Undercity"
-run/main_scene="res://scenes/bataille.tscn"
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
+
+[autoload]
+
+Donnees="*res://scripts/donnees.gd"
 
 [display]
 

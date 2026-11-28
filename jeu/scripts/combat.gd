@@ -43,10 +43,16 @@ var detail_points := {}       # camp -> {source: points}
 var zones: Array = []         # [{cases: [Vector2i], compteur: {camp: rounds}, tenue_par: camp ou ""}]
 
 
-func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", camp_b := "G") -> void:
+## Armées : liste de piles {nom, nombre} (ou l'ancien format [nom, nombre de piles pleines]).
+## Carte : {} pour une carte aléatoire, sinon {terrain: {"x,y": type}, zones: [[x, y], ...]}.
+func _init(unites: Dictionary, armee_a: Array, armee_b: Array, camp_a := "HR", camp_b := "G",
+		carte := {}) -> void:
 	rng.randomize()
-	generer_terrain()
-	generer_zones()
+	if carte.is_empty():
+		generer_terrain()
+		generer_zones()
+	else:
+		charger_carte(carte)
 	piles = _deployer(unites, armee_a, camp_a, true) + _deployer(unites, armee_b, camp_b, false)
 	for i in piles.size():
 		piles[i]["id"] = i
@@ -97,12 +103,23 @@ func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> 
 	var melee := []
 	var seigneurs := []
 	for entree in compo:
-		var u: Dictionary = unites[entree[0]]
-		for i in entree[1]:
+		var lot := []   # [[unité, nombre de créatures], ...]
+		if entree is Dictionary:
+			if not unites.has(entree["nom"]):
+				continue
+			var u0: Dictionary = unites[entree["nom"]]
+			lot.append([u0, clampi(int(entree.get("nombre", u0["escouade"])), 1, int(u0["escouade"]))])
+		else:
+			if not unites.has(entree[0]):
+				continue
+			for i in entree[1]:
+				lot.append([unites[entree[0]], int(unites[entree[0]]["escouade"])])
+		for e in lot:
+			var u: Dictionary = e[0]
 			if u.get("seigneur", false):
-				seigneurs.append(u)
+				seigneurs.append(e)
 			else:
-				(tireurs if u["portee"] > 0 else melee).append(u)
+				(tireurs if u["portee"] > 0 else melee).append(e)
 	var res := []
 	var ligne_avant := melee.slice(0, LIGNES)
 	# le seigneur se place au milieu de la ligne arrière, entre les tireurs
@@ -112,10 +129,10 @@ func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> 
 		var liste: Array = colonne[0]
 		var debut := (LIGNES - liste.size()) / 2
 		for i in liste.size():
-			var u: Dictionary = liste[i]
+			var u: Dictionary = liste[i][0]
 			res.append({
 				"u": u, "camp": camp, "pos": Vector2i(colonne[1], debut + i),
-				"pv_total": int(u["pv"]) * int(u["escouade"]),
+				"pv_total": int(u["pv"]) * int(liste[i][1]),
 				"munitions": int(u["munitions"]), "malus": [], "a_riposte": false,
 				"defend": false, "a_attendu": false,
 				"orient": Vector2i(1, 0) if gauche else Vector2i(-1, 0),
@@ -652,6 +669,39 @@ func _carte_connexe() -> bool:
 
 
 # --- Zones à contrôler -------------------------------------------------------
+
+## Carte faite à la main : terrain + cases de zone (les cases de zone voisines forment une zone).
+func charger_carte(carte: Dictionary) -> void:
+	terrain.clear()
+	zones.clear()
+	var t: Dictionary = carte.get("terrain", {})
+	for cle in t:
+		var xy: PackedStringArray = str(cle).split(",")
+		var c := Vector2i(int(xy[0]), int(xy[1]))
+		# rien dans les zones de déploiement
+		if dans_grille(c) and c.x >= ZONE_DEPLOIEMENT and c.x < COLONNES - ZONE_DEPLOIEMENT:
+			terrain[c] = t[cle]
+	types_carte = []
+	for type in terrain.values():
+		if not types_carte.has(type):
+			types_carte.append(type)
+	var restantes := []
+	for xy in carte.get("zones", []):
+		var c := Vector2i(int(xy[0]), int(xy[1]))
+		if dans_grille(c):
+			restantes.append(c)
+			terrain.erase(c)
+	while not restantes.is_empty():
+		var groupe := [restantes.pop_back()]
+		var i := 0
+		while i < groupe.size():
+			for v in voisins(groupe[i]):
+				if restantes.has(v) and (v.x == groupe[i].x or v.y == groupe[i].y):
+					restantes.erase(v)
+					groupe.append(v)
+			i += 1
+		zones.append({"cases": groupe, "compteur": {}, "tenue_par": ""})
+
 
 ## 1 à 3 zones, symétriques : une zone centrale de 2 cases et/ou une paire en miroir.
 func generer_zones() -> void:
