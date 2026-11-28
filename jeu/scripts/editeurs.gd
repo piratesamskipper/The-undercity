@@ -532,6 +532,7 @@ class GrilleCarte extends Control:
 # =============================================================================
 class EditeurArmees extends HBoxContainer:
 	var ed
+	var etiquettes_cout := {}   # camp -> Label du coût total
 
 	func _init(editeur) -> void:
 		ed = editeur
@@ -557,6 +558,11 @@ class EditeurArmees extends HBoxContainer:
 		titre.add_theme_font_size_override("font_size", 24)
 		titre.add_theme_color_override("font_color", COULEURS[camp].lightened(0.45))
 		col.add_child(titre)
+		var lc := Label.new()
+		lc.add_theme_color_override("font_color", Color(0.95, 0.8, 0.3))
+		col.add_child(lc)
+		etiquettes_cout[camp] = lc
+		_maj_cout(camp)
 		var armee: Array = Donnees.armees[camp]
 		var seigneurs := Donnees.unites.filter(func(u): return u["faction"] == camp and u.get("seigneur", false))
 		var troupes := Donnees.unites.filter(func(u): return u["faction"] == camp and not u.get("seigneur", false))
@@ -603,7 +609,7 @@ class EditeurArmees extends HBoxContainer:
 			ed.bouton(h, "✕", func(): armee.erase(p); _sauver(), 50)
 			cadre.add_child(h)
 			ed.ligne_nombre(cadre, "  Créatures (max %d)" % u["escouade"], int(p["nombre"]), 1, int(u["escouade"]),
-					func(v): p["nombre"] = v; Donnees.sauver_armees(), 10)
+					func(v): p["nombre"] = v; Donnees.sauver_armees(); _maj_cout(camp), 10)
 			col.add_child(cadre)
 			col.add_child(HSeparator.new())
 		if n_piles < Donnees.MAX_PILES and not troupes.is_empty():
@@ -613,6 +619,21 @@ class EditeurArmees extends HBoxContainer:
 		ed.bouton(hb, "Réinitialiser", func(): Donnees.reinitialiser_armees(); reconstruire())
 		ed.bouton(hb, "Exporter", func(): ed.exporter("Armées", Donnees.armees))
 		col.add_child(hb)
+
+	## Coût total de l'armée (troupes + seigneur), en or.
+	func _maj_cout(camp: String) -> void:
+		var troupes := 0
+		var seigneur := 0
+		for p in Donnees.armees[camp]:
+			var u = Donnees.unite(p["nom"])
+			if u == null:
+				continue
+			var c := int(u.get("cout", 0)) * int(p["nombre"])
+			if u.get("seigneur", false):
+				seigneur += c
+			else:
+				troupes += c
+		etiquettes_cout[camp].text = "Coût : %d or  (troupes %d + seigneur %d)" % [troupes + seigneur, troupes, seigneur]
 
 	func _changer_seigneur(camp: String, nom: String) -> void:
 		var armee: Array = Donnees.armees[camp]
