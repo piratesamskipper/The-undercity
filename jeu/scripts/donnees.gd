@@ -54,6 +54,32 @@ func charger() -> void:
 			armees[camp] = ARMEES_DEFAUT[camp].duplicate(true)
 
 
+var _textures := {}
+
+
+## Image d'une unité (chemin relatif à res://images/), mise en cache ; null si aucune.
+func texture(chemin: String) -> Texture2D:
+	if chemin == "":
+		return null
+	if not _textures.has(chemin):
+		var complet := "res://images/" + chemin
+		_textures[chemin] = load(complet) if ResourceLoader.exists(complet) else null
+	return _textures[chemin]
+
+
+## Toutes les images disponibles pour les unités (chemins relatifs à res://images/).
+func images_disponibles() -> Array:
+	var res := []
+	var dossiers := DirAccess.get_directories_at("res://images")
+	for d in dossiers:
+		for f in DirAccess.get_files_at("res://images/" + d):
+			f = f.trim_suffix(".import").trim_suffix(".remap")
+			if f.ends_with(".png") and not res.has(d + "/" + f):
+				res.append(d + "/" + f)
+	res.sort()
+	return res
+
+
 func unites_defaut() -> Array:
 	return JSON.parse_string(FileAccess.get_file_as_string("res://donnees/unites.json"))
 

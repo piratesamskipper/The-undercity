@@ -156,13 +156,6 @@ func _draw() -> void:
 		var coin := _case_vers_ecran(p["pos"]) + Vector2(5, 5)
 		var taille := Vector2.ONE * (TAILLE_CASE - 10)
 		draw_rect(Rect2(coin, taille), COULEURS[p["camp"]])
-		# orientation : petit triangle sur le bord vers lequel la pile regarde
-		var centre := coin + taille / 2
-		var o := Vector2(p["orient"]).normalized()
-		var pointe := centre + o * (taille.x / 2 + 4)
-		var base := centre + o * (taille.x / 2 - 6)
-		var perp := Vector2(-o.y, o.x) * 6
-		draw_colored_polygon(PackedVector2Array([pointe, base + perp, base - perp]), Color(0.95, 0.95, 0.85))
 		if actif != null and p["id"] == actif["id"]:
 			draw_rect(Rect2(coin - Vector2(4, 4), taille + Vector2(8, 8)), Color(1, 0.85, 0.3), false, 4.0)
 		elif selection != null and p["id"] == selection["id"]:
@@ -172,20 +165,42 @@ func _draw() -> void:
 		elif cibles.has(p["id"]):
 			var col := Color(0.95, 0.25, 0.2) if cibles[p["id"]] != "loin" else Color(0.95, 0.6, 0.2)
 			draw_rect(Rect2(coin - Vector2(3, 3), taille + Vector2(6, 6)), col, false, 3.0)
-		draw_string(police, coin + Vector2(0, 16), _abreviation(p["u"]["nom"]),
-				HORIZONTAL_ALIGNMENT_CENTER, taille.x, 13, Color.WHITE)
-		if Combat.seigneur(p):
-			draw_rect(Rect2(coin + Vector2(2, 2), taille - Vector2(4, 4)), Color(0.95, 0.8, 0.3), false, 2.0)
-		draw_string(police, coin + Vector2(0, 34), str(p["pv_total"]) if Combat.seigneur(p) else str(Combat.nombre(p)),
-				HORIZONTAL_ALIGNMENT_CENTER, taille.x, 16, Color(1, 1, 0.8))
+		var valeur := str(p["pv_total"]) if Combat.seigneur(p) else str(Combat.nombre(p))
 		var marques := ""
 		if p["defend"]:
 			marques += "DÉF "
 		if Combat.tireur(p):
 			marques += "♦%d" % p["munitions"]
-		if marques != "":
-			draw_string(police, coin + Vector2(0, 47), marques, HORIZONTAL_ALIGNMENT_CENTER,
-					taille.x, 10, Color(0.85, 0.85, 0.85))
+		var tex: Texture2D = Donnees.texture(p["u"].get("image", ""))
+		if tex != null:
+			# portrait : le haut de la figure (tête et buste) remplit la case
+			var cote: float = tex.get_width()
+			draw_texture_rect_region(tex, Rect2(coin, taille), Rect2(0, 0, cote, minf(cote, tex.get_height())))
+			draw_rect(Rect2(coin + Vector2(0, taille.y - 15), Vector2(taille.x, 15)), Color(0, 0, 0, 0.7))
+			draw_string(police, coin + Vector2(0, taille.y - 3), valeur, HORIZONTAL_ALIGNMENT_CENTER,
+					taille.x, 13, Color(1, 1, 0.8))
+			if marques != "":
+				draw_rect(Rect2(coin, Vector2(taille.x, 12)), Color(0, 0, 0, 0.6))
+				draw_string(police, coin + Vector2(0, 10), marques, HORIZONTAL_ALIGNMENT_CENTER,
+						taille.x, 10, Color(0.9, 0.9, 0.9))
+			draw_rect(Rect2(coin, taille), COULEURS[p["camp"]].lightened(0.2), false, 2.0)
+		else:
+			draw_string(police, coin + Vector2(0, 16), _abreviation(p["u"]["nom"]),
+					HORIZONTAL_ALIGNMENT_CENTER, taille.x, 13, Color.WHITE)
+			draw_string(police, coin + Vector2(0, 34), valeur, HORIZONTAL_ALIGNMENT_CENTER, taille.x, 16,
+					Color(1, 1, 0.8))
+			if marques != "":
+				draw_string(police, coin + Vector2(0, 47), marques, HORIZONTAL_ALIGNMENT_CENTER,
+						taille.x, 10, Color(0.85, 0.85, 0.85))
+		if Combat.seigneur(p):
+			draw_rect(Rect2(coin + Vector2(2, 2), taille - Vector2(4, 4)), Color(0.95, 0.8, 0.3), false, 2.0)
+		# orientation : petit triangle sur le bord vers lequel la pile regarde
+		var centre := coin + taille / 2
+		var o := Vector2(p["orient"]).normalized()
+		var pointe := centre + o * (taille.x / 2 + 4)
+		var base := centre + o * (taille.x / 2 - 6)
+		var perp := Vector2(-o.y, o.x) * 6
+		draw_colored_polygon(PackedVector2Array([pointe, base + perp, base - perp]), Color(0.95, 0.95, 0.85))
 
 	_dessiner_panneau_gauche()
 	_dessiner_panneau_droit()

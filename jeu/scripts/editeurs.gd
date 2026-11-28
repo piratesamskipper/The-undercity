@@ -201,6 +201,37 @@ class EditeurUnites extends HBoxContainer:
 		seig.toggled.connect(func(v): _basculer_seigneur(u, v))
 		h2.add_child(seig)
 		fiche.add_child(h2)
+		# Image
+		var hi := HBoxContainer.new()
+		var li := Label.new()
+		li.text = "Image"
+		li.custom_minimum_size.x = 210
+		hi.add_child(li)
+		var apercu := TextureRect.new()
+		apercu.custom_minimum_size = Vector2(60, 90)
+		apercu.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		apercu.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		apercu.texture = Donnees.texture(u.get("image", ""))
+		var choix_img := OptionButton.new()
+		choix_img.custom_minimum_size = Vector2(200, 46)
+		choix_img.add_item("Aucune")
+		for chemin in Donnees.images_disponibles():
+			choix_img.add_item(chemin)
+			if chemin == u.get("image", ""):
+				choix_img.select(choix_img.item_count - 1)
+		choix_img.item_selected.connect(func(i):
+			u["image"] = "" if i == 0 else choix_img.get_item_text(i)
+			apercu.texture = Donnees.texture(u["image"])
+			_sauver(false))
+		var prec := func(sens: int):
+			var i := clampi(choix_img.selected + sens, 0, choix_img.item_count - 1)
+			choix_img.select(i)
+			choix_img.item_selected.emit(i)
+		ed.bouton(hi, "◀", func(): prec.call(-1), 50)
+		hi.add_child(choix_img)
+		ed.bouton(hi, "▶", func(): prec.call(1), 50)
+		hi.add_child(apercu)
+		fiche.add_child(hi)
 		# Stats
 		for c in CHAMPS:
 			var cle: String = c[0]
