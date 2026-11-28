@@ -1,0 +1,10 @@
+[
+  {"id": "mine", "nom": "Mine d'or", "max": 10, "cout_base": 1000, "cout_par_niveau": 500, "production": 150,
+   "effet": "Produit 150 or par heure et par niveau"},
+  {"id": "couveuse", "nom": "Couveuse", "max": 5, "cout_mult": 3000, "debloque_tier": 1,
+   "effet": "Permet de recruter les unités de base (T1)"},
+  {"id": "matrones", "nom": "Couveuse des matrones", "max": 5, "cout_mult": 6000, "debloque_tier": 2,
+   "effet": "Permet de recruter les unités intermédiaires (T2)"},
+  {"id": "pere", "nom": "Couveuse du père des rats", "max": 5, "cout_mult": 12000, "debloque_tier": 3,
+   "effet": "Permet de recruter les élites (T3)"}
+]

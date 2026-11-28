@@ -15,7 +15,7 @@ func _ready() -> void:
 	var boite := VBoxContainer.new()
 	boite.set_anchors_preset(Control.PRESET_CENTER)
 	boite.custom_minimum_size = Vector2(420, 0)
-	boite.position = Vector2(-210, -290)
+	boite.position = Vector2(-210, -330)
 	boite.add_theme_constant_override("separation", 14)
 	add_child(boite)
 
@@ -31,6 +31,8 @@ func _ready() -> void:
 	sous.add_theme_color_override("font_color", Color(0.65, 0.65, 0.6))
 	boite.add_child(sous)
 
+	var bb := _bouton(boite, "Base des Hommes-rats", func(): get_tree().change_scene_to_file("res://scenes/base.tscn"))
+	bb.add_theme_color_override("font_color", Color(0.85, 0.6, 0.45))
 	_bouton(boite, "Jouer les Hommes-rats", func(): _lancer("G"))
 	_bouton(boite, "Jouer la Garde", func(): _lancer("HR"))
 	_bouton(boite, "Deux joueurs", func(): _lancer(""))
@@ -69,5 +71,6 @@ func _bouton(parent: Control, texte: String, action: Callable) -> Button:
 
 func _lancer(camp_ia: String) -> void:
 	Donnees.camp_ia = camp_ia
+	Donnees.mode_campagne = false
 	Donnees.carte_choisie = "" if choix_carte.selected <= 0 else choix_carte.get_item_text(choix_carte.selected)
 	get_tree().change_scene_to_file("res://scenes/bataille.tscn")

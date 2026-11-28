@@ -37,6 +37,8 @@ var message := ""         # retour au joueur (action impossible, etc.)
 var police: Font
 var camp_ia := ""         # camp joué par l'IA ("" = deux joueurs)
 var attente_ia := 0.0
+var campagne := false      # bataille lancée depuis la base
+var campagne_appliquee := false
 var a_deployer: Array = []  # camps humains qui doivent encore valider leur déploiement
 # Pendant le déploiement, l'initiative adverse est cachée. Plus tard, une capacité
 # spéciale de seigneur pourra la révéler : ce drapeau en tiendra lieu.
@@ -47,10 +49,15 @@ func _ready() -> void:
 	police = ThemeDB.fallback_font
 	unites = Donnees.unites_par_nom()
 	camp_ia = Donnees.camp_ia
+	campagne = Donnees.mode_campagne
 	nouvelle_bataille()
 
 
 func _process(delta: float) -> void:
+	if campagne and combat.vainqueur != "" and not campagne_appliquee:
+		campagne_appliquee = true
+		Donnees.fin_bataille_campagne(combat)
+		queue_redraw()
 	if not a_deployer.is_empty() or combat.vainqueur != "" or not _tour_ia():
 		attente_ia = 0.0
 		return
@@ -66,8 +73,11 @@ func _tour_ia() -> bool:
 
 
 func nouvelle_bataille() -> void:
-	var carte: Dictionary = Donnees.cartes.get(Donnees.carte_choisie, {})
-	combat = Combat.new(unites, Donnees.armees["HR"], Donnees.armees["G"], "HR", "G", carte)
+	if campagne:
+		combat = Combat.new(unites, Donnees.armee_joueur(), Donnees.armee_adverse, "HR", "G", {})
+	else:
+		var carte: Dictionary = Donnees.cartes.get(Donnees.carte_choisie, {})
+		combat = Combat.new(unites, Donnees.armees["HR"], Donnees.armees["G"], "HR", "G", carte)
 	a_deployer = []
 	for camp in ["HR", "G"]:
 		if camp != camp_ia:
@@ -301,8 +311,13 @@ func _dessiner_fin() -> void:
 		draw_string(police, Vector2(cadre.position.x, y), texte, HORIZONTAL_ALIGNMENT_CENTER, cadre.size.x, 17,
 				COULEURS[camp].lightened(0.45))
 		y += 30
-	_bouton(BOUTON_REJOUER, "Rejouer", true)
-	_bouton(BOUTON_MENU, "Menu", true)
+	if campagne:
+		_bouton(BOUTON_MENU, "Retour à la base", true)
+		draw_string(police, Vector2(0, 385), Donnees.dernier_resultat, HORIZONTAL_ALIGNMENT_CENTER, 1264, 17,
+				Color(0.95, 0.8, 0.3))
+	else:
+		_bouton(BOUTON_REJOUER, "Rejouer", true)
+		_bouton(BOUTON_MENU, "Menu", true)
 
 
 # --- Entrées -----------------------------------------------------------------
@@ -313,7 +328,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	var pos: Vector2 = event.position
 	message = ""
 	if combat.vainqueur != "":
-		if BOUTON_REJOUER.has_point(pos):
+		if campagne:
+			if BOUTON_MENU.has_point(pos) and campagne_appliquee:
+				get_tree().change_scene_to_file("res://scenes/base.tscn")
+		elif BOUTON_REJOUER.has_point(pos):
 			nouvelle_bataille()
 		elif BOUTON_MENU.has_point(pos):
 			get_tree().change_scene_to_file("res://scenes/menu.tscn")

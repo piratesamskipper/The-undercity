@@ -102,18 +102,19 @@ func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> 
 	var tireurs := []
 	var melee := []
 	var seigneurs := []
-	for entree in compo:
+	for k in compo.size():
+		var entree = compo[k]
 		var lot := []   # [[unité, nombre de créatures], ...]
 		if entree is Dictionary:
 			if not unites.has(entree["nom"]):
 				continue
 			var u0: Dictionary = unites[entree["nom"]]
-			lot.append([u0, clampi(int(entree.get("nombre", u0["escouade"])), 1, int(u0["escouade"]))])
+			lot.append([u0, clampi(int(entree.get("nombre", u0["escouade"])), 1, int(u0["escouade"])), k])
 		else:
 			if not unites.has(entree[0]):
 				continue
 			for i in entree[1]:
-				lot.append([unites[entree[0]], int(unites[entree[0]]["escouade"])])
+				lot.append([unites[entree[0]], int(unites[entree[0]]["escouade"]), k])
 		for e in lot:
 			var u: Dictionary = e[0]
 			if u.get("seigneur", false):
@@ -133,6 +134,7 @@ func _deployer(unites: Dictionary, compo: Array, camp: String, gauche: bool) -> 
 			res.append({
 				"u": u, "camp": camp, "pos": Vector2i(colonne[1], debut + i),
 				"pv_total": int(u["pv"]) * int(liste[i][1]),
+				"origine": liste[i][2],   # index de la pile dans l'armée fournie
 				"munitions": int(u["munitions"]), "malus": [], "a_riposte": false,
 				"defend": false, "a_attendu": false,
 				"orient": Vector2i(1, 0) if gauche else Vector2i(-1, 0),
